@@ -28,13 +28,11 @@ end)
 _G.processedParts = {}
 _G.floatSpeed = 10
 _G.moveDirectionType = "up"
-_G.moveDirection = Vector3.new(0, 1, 0)
 _G.fixedMode = false
 
 -- 状态管理事件
 if not _G.FloatingStateChanged then
     _G.FloatingStateChanged = Instance.new("BindableEvent")
-    _G.FloatingStateChanged.Name = "FloatingStateChanged"
 end
 
 -- 死亡状态检测
@@ -148,10 +146,6 @@ local function ProcessPart(v)
             end
         end
 
-        if v:FindFirstChild("Torque") then
-            v.Torque:Destroy()
-        end
-
         local bodyVelocity = Instance.new("BodyVelocity")
         bodyVelocity.Parent = v
         bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
@@ -255,77 +249,78 @@ local function StopAllParts()
     UpdateAllPartsVelocity()
 end
 
-local function PreventRotation()
-    _G.fixedMode = true
-    for part, data in pairs(_G.processedParts) do
-        if data.bodyVelocity and data.bodyVelocity.Parent then
-            if not data.bodyGyro or not data.bodyGyro.Parent then
-                local bodyGyro = Instance.new("BodyGyro")
-                bodyGyro.Parent = part
-                bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                bodyGyro.P = 1000
-                bodyGyro.D = 100
-                data.bodyGyro = bodyGyro
-            end
-        end
-    end
-    UpdateAllPartsVelocity()
-end
-
-local function AllowRotation()
-    _G.fixedMode = false
-    for part, data in pairs(_G.processedParts) do
-        if data.bodyGyro and data.bodyGyro.Parent then
-            data.bodyGyro:Destroy()
-            data.bodyGyro = nil
-        end
-    end
-    UpdateAllPartsVelocity()
-end
-
 local function ToggleRotationPrevention()
     if _G.fixedMode then
-        AllowRotation()
+        _G.fixedMode = false
+        for part, data in pairs(_G.processedParts) do
+            if data.bodyGyro and data.bodyGyro.Parent then
+                data.bodyGyro:Destroy()
+                data.bodyGyro = nil
+            end
+        end
         return false
     else
-        PreventRotation()
+        _G.fixedMode = true
+        for part, data in pairs(_G.processedParts) do
+            if data.bodyVelocity and data.bodyVelocity.Parent then
+                if not data.bodyGyro or not data.bodyGyro.Parent then
+                    local bodyGyro = Instance.new("BodyGyro")
+                    bodyGyro.Parent = part
+                    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                    bodyGyro.P = 1000
+                    bodyGyro.D = 100
+                    data.bodyGyro = bodyGyro
+                end
+            end
+        end
         return true
     end
 end
 
--- 创建GUI
-local function CreateMobileGUI()
+-- 创建优化的GUI
+local function CreateOptimizedGUI()
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MobileFloatingControl"
+    screenGui.Name = "FloatingControl"
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-    -- 主开关按钮
+    -- 主漂浮按钮 - 更紧凑
     local mainButton = Instance.new("TextButton")
     mainButton.Name = "MainToggle"
-    mainButton.Size = UDim2.new(0, 120, 0, 50)
-    mainButton.Position = UDim2.new(1, -130, 0, 10)
+    mainButton.Size = UDim2.new(0, 100, 0, 40)
+    mainButton.Position = UDim2.new(1, -110, 0, 10)
     mainButton.Text = "漂浮: 关闭"
-    mainButton.TextSize = 16
+    mainButton.TextSize = 14
     mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     mainButton.TextColor3 = Color3.new(1, 1, 1)
     mainButton.Parent = screenGui
 
-    -- 控制面板
+    -- 控制面板 - 更小尺寸
     local controlPanel = Instance.new("Frame")
     controlPanel.Name = "ControlPanel"
-    controlPanel.Size = UDim2.new(0, 280, 0, 350)
-    controlPanel.Position = UDim2.new(0.5, -140, 0.5, -175)
+    controlPanel.Size = UDim2.new(0, 200, 0, 320)
+    controlPanel.Position = UDim2.new(1, -210, 0, 60) -- 漂浮按钮旁边
     controlPanel.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    controlPanel.BackgroundTransparency = 0.3
+    controlPanel.BackgroundTransparency = 0.2
     controlPanel.BorderSizePixel = 0
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
 
+    -- 关闭面板按钮 - 移到顶部右侧
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "ClosePanel"
+    closeButton.Size = UDim2.new(0, 80, 0, 25)
+    closeButton.Position = UDim2.new(1, -85, 0, 5) -- 右上角
+    closeButton.Text = "关闭"
+    closeButton.TextSize = 12
+    closeButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
+    closeButton.TextColor3 = Color3.new(1, 1, 1)
+    closeButton.Parent = controlPanel
+
     -- 滚动框架
     local scrollFrame = Instance.new("ScrollingFrame")
     scrollFrame.Name = "ScrollFrame"
-    scrollFrame.Size = UDim2.new(1, -10, 1, -60)
-    scrollFrame.Position = UDim2.new(0, 5, 0, 5)
+    scrollFrame.Size = UDim2.new(1, 0, 1, -40)
+    scrollFrame.Position = UDim2.new(0, 0, 0, 35) -- 为关闭按钮留出空间
     scrollFrame.BackgroundTransparency = 1
     scrollFrame.BorderSizePixel = 0
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
@@ -335,19 +330,19 @@ local function CreateMobileGUI()
     -- 速度标签
     local speedLabel = Instance.new("TextLabel")
     speedLabel.Name = "SpeedLabel"
-    speedLabel.Size = UDim2.new(1, 0, 0, 30)
+    speedLabel.Size = UDim2.new(1, 0, 0, 25)
     speedLabel.Position = UDim2.new(0, 0, 0, 10)
     speedLabel.Text = "速度: " .. _G.floatSpeed
     speedLabel.TextColor3 = Color3.new(1, 1, 1)
     speedLabel.BackgroundTransparency = 1
-    speedLabel.TextSize = 18
+    speedLabel.TextSize = 14
     speedLabel.Parent = scrollFrame
 
     -- 速度控制按钮
     local speedUpButton = Instance.new("TextButton")
     speedUpButton.Name = "SpeedUp"
-    speedUpButton.Size = UDim2.new(0, 60, 0, 40)
-    speedUpButton.Position = UDim2.new(0.7, 0, 0, 50)
+    speedUpButton.Size = UDim2.new(0, 40, 0, 40)
+    speedUpButton.Position = UDim2.new(0.7, 0, 0, 45)
     speedUpButton.Text = "+"
     speedUpButton.TextSize = 20
     speedUpButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
@@ -356,8 +351,8 @@ local function CreateMobileGUI()
 
     local speedDownButton = Instance.new("TextButton")
     speedDownButton.Name = "SpeedDown"
-    speedDownButton.Size = UDim2.new(0, 60, 0, 40)
-    speedDownButton.Position = UDim2.new(0.3, 0, 0, 50)
+    speedDownButton.Size = UDim2.new(0, 40, 0, 40)
+    speedDownButton.Position = UDim2.new(0.3, 0, 0, 45)
     speedDownButton.Text = "-"
     speedDownButton.TextSize = 20
     speedDownButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
@@ -367,10 +362,10 @@ local function CreateMobileGUI()
     -- 停止按钮
     local stopButton = Instance.new("TextButton")
     stopButton.Name = "Stop"
-    stopButton.Size = UDim2.new(0, 120, 0, 40)
-    stopButton.Position = UDim2.new(0.5, -60, 0, 100)
+    stopButton.Size = UDim2.new(0, 80, 0, 30)
+    stopButton.Position = UDim2.new(0.5, -40, 0, 95)
     stopButton.Text = "停止移动"
-    stopButton.TextSize = 16
+    stopButton.TextSize = 12
     stopButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
     stopButton.TextColor3 = Color3.new(1, 1, 1)
     stopButton.Parent = scrollFrame
@@ -378,10 +373,10 @@ local function CreateMobileGUI()
     -- 防旋转按钮
     local fixButton = Instance.new("TextButton")
     fixButton.Name = "FixRotation"
-    fixButton.Size = UDim2.new(0, 140, 0, 40)
-    fixButton.Position = UDim2.new(0.5, -70, 0, 150)
-    fixButton.Text = "防止旋转: 关闭"
-    fixButton.TextSize = 16
+    fixButton.Size = UDim2.new(0, 100, 0, 30)
+    fixButton.Position = UDim2.new(0.5, -50, 0, 135)
+    fixButton.Text = "防旋转: 关闭"
+    fixButton.TextSize = 12
     fixButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
     fixButton.TextColor3 = Color3.new(1, 1, 1)
     fixButton.Parent = scrollFrame
@@ -389,28 +384,28 @@ local function CreateMobileGUI()
     -- 方向标签
     local directionLabel = Instance.new("TextLabel")
     directionLabel.Name = "DirectionLabel"
-    directionLabel.Size = UDim2.new(1, 0, 0, 30)
-    directionLabel.Position = UDim2.new(0, 0, 0, 200)
+    directionLabel.Size = UDim2.new(1, 0, 0, 25)
+    directionLabel.Position = UDim2.new(0, 0, 0, 175)
     directionLabel.Text = "移动方向"
     directionLabel.TextColor3 = Color3.new(1, 1, 1)
     directionLabel.BackgroundTransparency = 1
-    directionLabel.TextSize = 18
+    directionLabel.TextSize = 14
     directionLabel.Parent = scrollFrame
 
     -- 方向按钮
     local directions = {
-        {name = "向上", dir = "up", pos = UDim2.new(0.5, -30, 0, 240)},
-        {name = "向下", dir = "down", pos = UDim2.new(0.5, -30, 0, 290)},
-        {name = "向前", dir = "forward", pos = UDim2.new(0.25, -30, 0, 265)},
-        {name = "向后", dir = "back", pos = UDim2.new(0.75, -30, 0, 265)},
-        {name = "向左", dir = "left", pos = UDim2.new(0.1, -30, 0, 265)},
-        {name = "向右", dir = "right", pos = UDim2.new(0.9, -30, 0, 265)}
+        {name = "上", dir = "up", pos = UDim2.new(0.5, -20, 0, 210)},
+        {name = "下", dir = "down", pos = UDim2.new(0.5, -20, 0, 250)},
+        {name = "前", dir = "forward", pos = UDim2.new(0.2, -20, 0, 230)},
+        {name = "后", dir = "back", pos = UDim2.new(0.8, -20, 0, 230)},
+        {name = "左", dir = "left", pos = UDim2.new(0.05, -20, 0, 230)},
+        {name = "右", dir = "right", pos = UDim2.new(0.95, -20, 0, 230)}
     }
 
     for i, dirInfo in ipairs(directions) do
         local button = Instance.new("TextButton")
         button.Name = dirInfo.name
-        button.Size = UDim2.new(0, 60, 0, 35)
+        button.Size = UDim2.new(0, 40, 0, 30)
         button.Position = dirInfo.pos
         button.Text = dirInfo.name
         button.TextSize = 12
@@ -425,32 +420,21 @@ local function CreateMobileGUI()
         end)
     end
 
-    -- 关闭面板按钮 - 修复：放在控制面板内，不在滚动框架内
-    local closeButton = Instance.new("TextButton")
-    closeButton.Name = "ClosePanel"
-    closeButton.Size = UDim2.new(0, 100, 0, 40)
-    closeButton.Position = UDim2.new(0.5, -50, 1, -50)
-    closeButton.Text = "关闭面板"
-    closeButton.TextSize = 16
-    closeButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
-    closeButton.TextColor3 = Color3.new(1, 1, 1)
-    closeButton.Parent = controlPanel
+    -- 面板开关按钮 - 现在也可以关闭面板
+    local panelToggleButton = Instance.new("TextButton")
+    panelToggleButton.Name = "PanelToggle"
+    panelToggleButton.Size = UDim2.new(0, 100, 0, 30)
+    panelToggleButton.Position = UDim2.new(1, -110, 0, 50) -- 漂浮按钮下方
+    panelToggleButton.Text = "打开控制面板"
+    panelToggleButton.TextSize = 12
+    panelToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 200)
+    panelToggleButton.TextColor3 = Color3.new(1, 1, 1)
+    panelToggleButton.Parent = screenGui
 
-    -- 打开面板按钮
-    local openPanelButton = Instance.new("TextButton")
-    openPanelButton.Name = "OpenPanel"
-    openPanelButton.Size = UDim2.new(0, 120, 0, 40)
-    openPanelButton.Position = UDim2.new(1, -130, 0, 60)
-    openPanelButton.Text = "打开控制面板"
-    openPanelButton.TextSize = 14
-    openPanelButton.BackgroundColor3 = Color3.fromRGB(100, 100, 200)
-    openPanelButton.TextColor3 = Color3.new(1, 1, 1)
-    openPanelButton.Visible = true
-    openPanelButton.Parent = screenGui
-
-    -- 按钮功能
+    -- 主按钮功能
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
+        
         anActivity = not anActivity
         ProcessAllParts()
         if anActivity then
@@ -464,6 +448,23 @@ local function CreateMobileGUI()
         end
     end)
 
+    -- 面板开关按钮功能
+    panelToggleButton.MouseButton1Click:Connect(function()
+        controlPanel.Visible = not controlPanel.Visible
+        if controlPanel.Visible then
+            panelToggleButton.Text = "关闭控制面板"
+        else
+            panelToggleButton.Text = "打开控制面板"
+        end
+    end)
+
+    -- 关闭面板按钮功能
+    closeButton.MouseButton1Click:Connect(function()
+        controlPanel.Visible = false
+        panelToggleButton.Text = "打开控制面板"
+    end)
+
+    -- 速度按钮功能
     speedUpButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
         _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 1, 100)
@@ -478,34 +479,26 @@ local function CreateMobileGUI()
         UpdateAllPartsVelocity()
     end)
 
+    -- 停止按钮功能
     stopButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
         StopAllParts()
     end)
 
+    -- 防旋转按钮功能
     fixButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
-        local newFixedState = ToggleRotationPrevention()
-        if newFixedState then
-            fixButton.Text = "防止旋转: 开启"
+        local newState = ToggleRotationPrevention()
+        if newState then
+            fixButton.Text = "防旋转: 开启"
             fixButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
         else
-            fixButton.Text = "防止旋转: 关闭"
+            fixButton.Text = "防旋转: 关闭"
             fixButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
         end
     end)
 
-    closeButton.MouseButton1Click:Connect(function()
-        controlPanel.Visible = false
-        openPanelButton.Visible = true
-    end)
-
-    openPanelButton.MouseButton1Click:Connect(function()
-        controlPanel.Visible = true
-        openPanelButton.Visible = false
-    end)
-
-    -- 状态监听
+    -- 状态变化监听
     _G.FloatingStateChanged.Event:Connect(function(stateInfo)
         if stateInfo.state == "disabled" and stateInfo.reason == "player_died" then
             mainButton.Text = "漂浮: 关闭"
@@ -516,14 +509,14 @@ local function CreateMobileGUI()
     return screenGui
 end
 
--- 启动脚本
+-- 初始化
 local success, err = pcall(function()
-    CreateMobileGUI()
+    CreateOptimizedGUI()
     setupDeathDetection()
 end)
 
 if not success then
-    warn("脚本加载失败: " .. tostring(err))
+    warn("GUI创建失败: " .. tostring(err))
 end
 
-print("全局物体漂浮脚本已加载成功!")
+print("漂浮脚本加载成功!")

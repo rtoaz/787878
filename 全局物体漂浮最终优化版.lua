@@ -9,12 +9,6 @@ if not LocalPlayer then
     LocalPlayer = Players.LocalPlayer
 end
 
--- 作者提示
-local authorMessage = Instance.new("Message")
-authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
-authorMessage.Parent = Workspace
-task.delay(3, function() authorMessage:Destroy() end)
-
 -- ================= 全局状态 =================
 _G.processedParts = {}
 _G.floatSpeed = 10
@@ -289,26 +283,26 @@ local function CreateMobileGUI()
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
 
-    -- 中文方向按钮
-    local directions = {
-        {"上","up"},
-        {"下","down"},
-        {"前","forward"},
-        {"后","back"},
-        {"左","left"},
-        {"右","right"},
+    -- 十字架方向按钮
+    local dirButtons = {
+        {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
+        {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
+        {name="左", dir="left", pos=UDim2.new(0.2,0,0,225)},
+        {name="右", dir="right", pos=UDim2.new(0.5,0,0,225)},
+        {name="前", dir="forward", pos=UDim2.new(0.05,0,0,225)}, -- 左的左边
+        {name="后", dir="back", pos=UDim2.new(0.65,0,0,225)},    -- 右的右边
     }
-    for i,info in ipairs(directions) do
-        local text,dir = info[1],info[2]
+
+    for _,info in ipairs(dirButtons) do
         local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0.4,0,0,28)
-        b.Position = UDim2.new(0.05 + 0.45*((i-1)%2),0,0,190+35*math.floor((i-1)/2))
-        b.Text = text
+        b.Size = UDim2.new(0.15,0,0,35)
+        b.Position = info.pos
+        b.Text = info.name
         b.BackgroundColor3 = Color3.fromRGB(50,120,220)
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
         b.MouseButton1Click:Connect(function()
-            _G.moveDirectionType = dir
+            _G.moveDirectionType = info.dir
             UpdateAllPartsVelocity()
         end)
     end

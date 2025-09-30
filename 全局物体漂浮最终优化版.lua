@@ -182,7 +182,9 @@ local function onCharacterAdded(char)
         mainButton.Text = "漂浮: 关闭"
         mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
     end
-    if controlPanel then controlPanel.Visible = false end
+    if controlPanel then
+        controlPanel.Visible = false
+    end
     showNotify("漂浮已关闭")
     local humanoid = char:WaitForChild("Humanoid")
     if humanoid then
@@ -196,7 +198,9 @@ local function onCharacterAdded(char)
                     mainButton.Text = "漂浮: 关闭"
                     mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
                 end
-                if controlPanel then controlPanel.Visible = false end
+                if controlPanel then
+                    controlPanel.Visible = false
+                end
                 showNotify("漂浮已关闭")
             end
         end)
@@ -242,11 +246,11 @@ local function CreateMobileGUI()
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
-    -- 控制面板
+    -- 控制面板（透明）
     controlPanel = Instance.new("Frame")
     controlPanel.Size = UDim2.new(0, 220, 0, 320)
     controlPanel.Position = UDim2.new(1, -360, 0, 10)
-    controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    controlPanel.BackgroundTransparency = 1  -- 透明
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
 
@@ -258,6 +262,7 @@ local function CreateMobileGUI()
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
 
+    -- 停止移动按钮（红色）
     local stopBtn = Instance.new("TextButton")
     stopBtn.Size = UDim2.new(0.85,0,0,30)
     stopBtn.Position = UDim2.new(0.075,0,0,20)
@@ -266,6 +271,7 @@ local function CreateMobileGUI()
     stopBtn.TextColor3 = Color3.new(1,1,1)
     stopBtn.Parent = content
 
+    -- 防旋转按钮（红色）
     local fixBtn = Instance.new("TextButton")
     fixBtn.Size = UDim2.new(0.85,0,0,30)
     fixBtn.Position = UDim2.new(0.075,0,0,60)
@@ -274,6 +280,7 @@ local function CreateMobileGUI()
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
 
+    -- 方向按钮（蓝色）
     local directions = {"up","down","forward","back","left","right"}
     for i,dir in ipairs(directions) do
         local b = Instance.new("TextButton")

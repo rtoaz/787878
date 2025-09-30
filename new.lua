@@ -30,7 +30,7 @@ task.delay(3, function() authorMessage:Destroy() end)
 -- ================= 全局状态 =================
 _G.processedParts = {}
 _G.floatSpeed = 10
-_G.moveDirectionType = "up"
+_G.moveDirectionType = "up"  -- 设置初始漂浮方向为向上
 _G.fixedMode = false
 
 local isPlayerDead = false

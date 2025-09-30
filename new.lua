@@ -31,7 +31,7 @@ task.delay(3, function() authorMessage:Destroy() end)
 _G.processedParts = {}
 _G.floatSpeed = 10
 _G.moveDirectionType = "up"  -- 设置初始漂浮方向为向上
-_G.fixedMode = false
+_G.fixedMode = false  -- 默认允许旋转
 
 local isPlayerDead = false
 local anActivity = false
@@ -177,6 +177,7 @@ end
 
 local function ToggleRotationPrevention()
     if _G.fixedMode then
+        -- 禁用防止旋转，允许物体自由旋转
         _G.fixedMode = false
         for _, data in pairs(_G.processedParts) do
             if data.bodyGyro and data.bodyGyro.Parent then
@@ -186,7 +187,18 @@ local function ToggleRotationPrevention()
         end
         return false
     else
+        -- 启用防止旋转，禁止物体旋转
         _G.fixedMode = true
+        for _, data in pairs(_G.processedParts) do
+            if data.bodyGyro and not data.bodyGyro.Parent then
+                -- 添加或恢复旋转防止机制
+                data.bodyGyro = Instance.new("BodyGyro")
+                data.bodyGyro.Parent = data.part
+                data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                data.bodyGyro.P = 1000
+                data.bodyGyro.D = 100
+            end
+        end
         return true
     end
 end

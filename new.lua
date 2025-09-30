@@ -335,10 +335,10 @@ local function CreateMobileGUI()
     local dirButtons = {
         {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
         {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
-        {name="右", dir="left", pos=UDim2.new(0.2,0,0,225)},  -- 交换左和右
-        {name="左", dir="right", pos=UDim2.new(0.5,0,0,225)},  -- 交换右和左
-        {name="后", dir="forward", pos=UDim2.new(0.05,0,0,225)}, -- 交换前和后
-        {name="前", dir="back", pos=UDim2.new(0.65,0,0,225)},    -- 交换后和前
+        {name="左", dir="right", pos=UDim2.new(0.2,0,0,225)},  -- 交换左和右
+        {name="右", dir="left", pos=UDim2.new(0.5,0,0,225)},  -- 交换右和左
+        {name="前", dir="back", pos=UDim2.new(0.05,0,0,225)}, -- 交换前和后
+        {name="后", dir="forward", pos=UDim2.new(0.65,0,0,225)},    -- 交换后和前
     }
 
     for _,info in ipairs(dirButtons) do

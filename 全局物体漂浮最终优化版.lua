@@ -169,7 +169,7 @@ local function onCharacterAdded(char)
     CleanupParts()
     if mainButton then
         mainButton.Text = "漂浮: 关闭"
-        mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+        mainButton.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
     end
     if controlPanel then
         controlPanel.Visible = false
@@ -184,7 +184,7 @@ local function onCharacterAdded(char)
                 CleanupParts()
                 if mainButton then
                     mainButton.Text = "漂浮: 关闭"
-                    mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+                    mainButton.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
                 end
                 if controlPanel then
                     controlPanel.Visible = false
@@ -209,7 +209,7 @@ local function CreateMobileGUI()
     mainButton.Size = UDim2.new(0, 120, 0, 50)
     mainButton.Position = UDim2.new(1, -130, 0, 10)
     mainButton.Text = "漂浮: 关闭"
-    mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    mainButton.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
     mainButton.TextColor3 = Color3.new(1,1,1)
     mainButton.Parent = screenGui
 
@@ -218,7 +218,7 @@ local function CreateMobileGUI()
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
     panelToggle.Position = UDim2.new(1, -130, 0, 70)
     panelToggle.Text = "控制面板"
-    panelToggle.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    panelToggle.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
@@ -258,7 +258,7 @@ local function CreateMobileGUI()
     speedUp.Size = UDim2.new(0.4,0,0,30)
     speedUp.Position = UDim2.new(0.05,0,0,50)
     speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    speedUp.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
     speedUp.TextColor3 = Color3.new(1,1,1)
     speedUp.Parent = content
 
@@ -267,7 +267,7 @@ local function CreateMobileGUI()
     speedDown.Size = UDim2.new(0.4,0,0,30)
     speedDown.Position = UDim2.new(0.55,0,0,50)
     speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    speedDown.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
     speedDown.TextColor3 = Color3.new(1,1,1)
     speedDown.Parent = content
 
@@ -276,7 +276,7 @@ local function CreateMobileGUI()
     stopBtn.Size = UDim2.new(0.85,0,0,30)
     stopBtn.Position = UDim2.new(0.075,0,0,100)
     stopBtn.Text = "停止移动"
-    stopBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    stopBtn.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
     stopBtn.TextColor3 = Color3.new(1,1,1)
     stopBtn.Parent = content
 
@@ -285,7 +285,7 @@ local function CreateMobileGUI()
     fixBtn.Size = UDim2.new(0.85,0,0,30)
     fixBtn.Position = UDim2.new(0.075,0,0,140)
     fixBtn.Text = "防止旋转: 关闭"
-    fixBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    fixBtn.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
 
@@ -304,7 +304,7 @@ local function CreateMobileGUI()
         b.Size = UDim2.new(0.15,0,0,35)
         b.Position = info.pos
         b.Text = info.name
-        b.BackgroundColor3 = Color3.fromRGB(50,120,220)
+        b.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
         b.MouseButton1Click:Connect(function()
@@ -319,11 +319,11 @@ local function CreateMobileGUI()
         anActivity = not anActivity
         if anActivity then
             mainButton.Text = "漂浮: 开启"
-            mainButton.BackgroundColor3 = Color3.fromRGB(50,200,50)
+            mainButton.BackgroundColor3 = Color3.fromRGB(50,255,50)  -- 鲜艳绿色
             ProcessAllParts()
         else
             mainButton.Text = "漂浮: 关闭"
-            mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
+            mainButton.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
             CleanupParts()
             controlPanel.Visible = false
         end
@@ -337,10 +337,10 @@ local function CreateMobileGUI()
         local on = ToggleRotationPrevention()
         if on then
             fixBtn.Text = "防止旋转: 开启"
-            fixBtn.BackgroundColor3 = Color3.fromRGB(50,200,50) -- 开启时绿色
+            fixBtn.BackgroundColor3 = Color3.fromRGB(50,255,50)  -- 鲜艳绿色
         else
             fixBtn.Text = "防止旋转: 关闭"
-            fixBtn.BackgroundColor3 = Color3.fromRGB(200,50,50) -- 关闭时红色
+            fixBtn.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
         end
     end)
 

@@ -29,13 +29,14 @@ local updateConnection = nil
 local mainButton
 local controlPanel
 local notifyLabel
+local speedLabel
 
 -- ================= 辅助函数 =================
 local function showNotify(msg)
     if not notifyLabel then return end
     notifyLabel.Text = msg
     notifyLabel.Visible = true
-    task.delay(2, function()
+    task.delay(0.5, function()   -- 显示时间改为0.5秒
         notifyLabel.Visible = false
     end)
 end
@@ -235,7 +236,7 @@ local function CreateMobileGUI()
     mainButton.TextColor3 = Color3.new(1,1,1)
     mainButton.Parent = screenGui
 
-    -- 控制面板按钮（蓝色）
+    -- 控制面板按钮
     local panelToggle = Instance.new("TextButton")
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
     panelToggle.Position = UDim2.new(1, -130, 0, 70)
@@ -244,9 +245,9 @@ local function CreateMobileGUI()
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
-    -- 控制面板（半透明 + 可移动）
+    -- 控制面板
     controlPanel = Instance.new("Frame")
-    controlPanel.Size = UDim2.new(0, 220, 0, 320)
+    controlPanel.Size = UDim2.new(0, 220, 0, 360)
     controlPanel.Position = UDim2.new(1, -360, 0, 10)
     controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
     controlPanel.BackgroundTransparency = 0.3
@@ -265,7 +266,7 @@ local function CreateMobileGUI()
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
 
-    -- 停止移动按钮（红色）
+    -- 停止移动按钮
     local stopBtn = Instance.new("TextButton")
     stopBtn.Size = UDim2.new(0.85,0,0,30)
     stopBtn.Position = UDim2.new(0.075,0,0,20)
@@ -274,7 +275,7 @@ local function CreateMobileGUI()
     stopBtn.TextColor3 = Color3.new(1,1,1)
     stopBtn.Parent = content
 
-    -- 防旋转按钮（红色）
+    -- 防旋转按钮
     local fixBtn = Instance.new("TextButton")
     fixBtn.Size = UDim2.new(0.85,0,0,30)
     fixBtn.Position = UDim2.new(0.075,0,0,60)
@@ -283,7 +284,35 @@ local function CreateMobileGUI()
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
 
-    -- 中文方向按钮（蓝色）
+    -- 速度显示
+    speedLabel = Instance.new("TextLabel")
+    speedLabel.Size = UDim2.new(0.85,0,0,30)
+    speedLabel.Position = UDim2.new(0.075,0,0,100)
+    speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
+    speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    speedLabel.TextColor3 = Color3.new(1,1,1)
+    speedLabel.TextScaled = true
+    speedLabel.Parent = content
+
+    -- 加速按钮（改成 +）
+    local speedUp = Instance.new("TextButton")
+    speedUp.Size = UDim2.new(0.4,0,0,30)
+    speedUp.Position = UDim2.new(0.05,0,0,140)
+    speedUp.Text = "+"
+    speedUp.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    speedUp.TextColor3 = Color3.new(1,1,1)
+    speedUp.Parent = content
+
+    -- 减速按钮（改成 -）
+    local speedDown = Instance.new("TextButton")
+    speedDown.Size = UDim2.new(0.4,0,0,30)
+    speedDown.Position = UDim2.new(0.55,0,0,140)
+    speedDown.Text = "-"
+    speedDown.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    speedDown.TextColor3 = Color3.new(1,1,1)
+    speedDown.Parent = content
+
+    -- 中文方向按钮
     local directions = {
         {"上","up"},
         {"下","down"},
@@ -296,7 +325,7 @@ local function CreateMobileGUI()
         local text,dir = info[1],info[2]
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.4,0,0,28)
-        b.Position = UDim2.new(0.05 + 0.45*((i-1)%2),0,0,110+35*math.floor((i-1)/2))
+        b.Position = UDim2.new(0.05 + 0.45*((i-1)%2),0,0,190+35*math.floor((i-1)/2))
         b.Text = text
         b.BackgroundColor3 = Color3.fromRGB(50,120,220)
         b.TextColor3 = Color3.new(1,1,1)
@@ -336,6 +365,18 @@ local function CreateMobileGUI()
         else
             fixBtn.Text = "防止旋转: 关闭"
         end
+    end)
+
+    speedUp.MouseButton1Click:Connect(function()
+        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 0, 100)
+        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
+        UpdateAllPartsVelocity()
+    end)
+
+    speedDown.MouseButton1Click:Connect(function()
+        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 0, 100)
+        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
+        UpdateAllPartsVelocity()
     end)
 end
 

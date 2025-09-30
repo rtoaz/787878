@@ -302,10 +302,12 @@ local function CreateMobileGUI()
         {name="后", dir="back", pos=UDim2.new(0.65,0,0,225)},    -- 右的右边
     }
 
+    -- 调整十字架按钮居中
+    local centerX = (1 - 0.15) / 2 -- 居中计算
     for _,info in ipairs(dirButtons) do
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.15,0,0,35)
-        b.Position = info.pos
+        b.Position = UDim2.new(centerX,0,0,info.pos.Y.Offset)  -- 调整位置，确保居中
         b.Text = info.name
         b.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
         b.TextColor3 = Color3.new(1,1,1)

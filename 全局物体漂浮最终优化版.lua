@@ -337,8 +337,10 @@ local function CreateMobileGUI()
         local on = ToggleRotationPrevention()
         if on then
             fixBtn.Text = "防止旋转: 开启"
+            fixBtn.BackgroundColor3 = Color3.fromRGB(50,200,50) -- 开启时绿色
         else
             fixBtn.Text = "防止旋转: 关闭"
+            fixBtn.BackgroundColor3 = Color3.fromRGB(200,50,50) -- 关闭时红色
         end
     end)
 

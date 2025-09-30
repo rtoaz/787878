@@ -218,7 +218,7 @@ local function CreateMobileGUI()
 
     -- 控制面板按钮
     local panelToggle = Instance.new("TextButton")
-    panelToggle.Size = UDim2.new(0, 120, 0, 30)
+    panelToggle.Size = UDim2.new(0, 160, 0, 30)  -- 增加按钮宽度
     panelToggle.Position = UDim2.new(1, -130, 0, 70)
     panelToggle.Text = "控制面板"
     panelToggle.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
@@ -294,10 +294,10 @@ local function CreateMobileGUI()
 
     -- 十字架方向按钮
     local dirButtons = {
-        {name="上", dir="up", pos=UDim2.new(0.3,0,0,190)},
-        {name="下", dir="down", pos=UDim2.new(0.3,0,0,260)},
+        {name="上", dir="up", pos=UDim2.new(0.25,0,0,190)},
+        {name="下", dir="down", pos=UDim2.new(0.25,0,0,260)},
         {name="左", dir="left", pos=UDim2.new(0.1,0,0,225)},
-        {name="右", dir="right", pos=UDim2.new(0.5,0,0,225)},
+        {name="右", dir="right", pos=UDim2.new(0.4,0,0,225)},
         {name="前", dir="forward", pos=UDim2.new(0.05,0,0,225)}, -- 左的左边
         {name="后", dir="back", pos=UDim2.new(0.65,0,0,225)},    -- 右的右边
     }

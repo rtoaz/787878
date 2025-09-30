@@ -212,7 +212,7 @@ local function CreateMobileGUI()
     -- 主开关按钮
     mainButton = Instance.new("TextButton")
     mainButton.Size = UDim2.new(0, 120, 0, 50)
-    mainButton.Position = UDim2.new(1, -130, 0, 10)
+    mainButton.Position = UDim2.new(1, -130, 0, 50)  -- 向上偏移
     mainButton.Text = "漂浮: 关闭"
     mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
     mainButton.TextColor3 = Color3.new(1,1,1)
@@ -221,7 +221,7 @@ local function CreateMobileGUI()
     -- 控制面板按钮
     local panelToggle = Instance.new("TextButton")
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
-    panelToggle.Position = UDim2.new(1, -130, 0, 70)
+    panelToggle.Position = UDim2.new(1, -130, 0, 120)  -- 向上偏移
     panelToggle.Text = "控制面板"
     panelToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
     panelToggle.TextColor3 = Color3.new(1,1,1)

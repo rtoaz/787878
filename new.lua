@@ -317,8 +317,6 @@ local function CreateMobileGUI()
             dragStartPosPanel = input.Position
         end
     end)
-
-    -- 其他内容继续...
 end
 
 -- 初始化

@@ -18,7 +18,7 @@ end
 
 -- 显示作者信息
 local authorMessage = Instance.new("Message")
-authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由（Star_Skater53）帮忙优化"
+authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
 authorMessage.Parent = Workspace
 task.delay(3, function()
     authorMessage:Destroy()
@@ -34,12 +34,15 @@ _G.fixedMode = false
 -- 状态管理事件
 if not _G.FloatingStateChanged then
     _G.FloatingStateChanged = Instance.new("BindableEvent")
+    _G.FloatingStateChanged.Name = "FloatingStateChanged"
 end
 
 -- 死亡状态检测
 local isPlayerDead = false
 local characterAddedConnection = nil
 local humanoidDiedConnection = nil
+local anActivity = false
+local updateConnection = nil
 
 -- 设置死亡检测
 local function setupDeathDetection()
@@ -136,7 +139,7 @@ local function ProcessPart(v)
                     if not existingBG or not existingBG.Parent then
                         local bodyGyro = Instance.new("BodyGyro")
                         bodyGyro.Parent = v
-                        bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+                        bodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
                         bodyGyro.P = 1000
                         bodyGyro.D = 100
                         _G.processedParts[v].bodyGyro = bodyGyro
@@ -176,7 +179,7 @@ local function ProcessPart(v)
         if _G.fixedMode then
             bodyGyro = Instance.new("BodyGyro")
             bodyGyro.Parent = v
-            bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+            bodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
             bodyGyro.P = 1000
             bodyGyro.D = 100
         end
@@ -188,9 +191,7 @@ local function ProcessPart(v)
     end
 end
 
-local anActivity = false
-local updateConnection = nil
-
+-- 处理所有零件
 local function ProcessAllParts()
     if isPlayerDead then
         if anActivity then
@@ -226,6 +227,7 @@ Workspace.DescendantAdded:Connect(function(v)
     end
 end)
 
+-- 清理零件
 local function CleanupParts()
     for _, data in pairs(_G.processedParts) do
         if data.bodyVelocity then
@@ -243,6 +245,7 @@ local function CleanupParts()
     end
 end
 
+-- 更新所有零件速度
 local function UpdateAllPartsVelocity()
     if isPlayerDead then
         for part, data in pairs(_G.processedParts) do
@@ -265,11 +268,13 @@ local function UpdateAllPartsVelocity()
     end
 end
 
+-- 停止所有零件
 local function StopAllParts()
     _G.floatSpeed = 0
     UpdateAllPartsVelocity()
 end
 
+-- 防止旋转
 local function PreventRotation()
     _G.fixedMode = true
     for part, data in pairs(_G.processedParts) do
@@ -277,7 +282,7 @@ local function PreventRotation()
             if not data.bodyGyro or not data.bodyGyro.Parent then
                 local bodyGyro = Instance.new("BodyGyro")
                 bodyGyro.Parent = part
-                bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+                bodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
                 bodyGyro.P = 1000
                 bodyGyro.D = 100
                 data.bodyGyro = bodyGyro
@@ -287,6 +292,7 @@ local function PreventRotation()
     UpdateAllPartsVelocity()
 end
 
+-- 允许旋转
 local function AllowRotation()
     _G.fixedMode = false
     for part, data in pairs(_G.processedParts) do
@@ -298,6 +304,7 @@ local function AllowRotation()
     UpdateAllPartsVelocity()
 end
 
+-- 切换防旋转
 local function ToggleRotationPrevention()
     if _G.fixedMode then
         AllowRotation()
@@ -331,45 +338,47 @@ local function CreateMobileGUI()
     controlPanel.Size = UDim2.new(0, 200, 0, 280)
     controlPanel.Position = UDim2.new(0.5, -100, 0.5, -140)
     controlPanel.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    controlPanel.BackgroundTransparency = 0.3
-    controlPanel.BorderSizePixel = 0
+    controlPanel.BackgroundTransparency = 0.2
+    controlPanel.BorderSizePixel = 2
+    controlPanel.BorderColor3 = Color3.fromRGB(100, 100, 100)
     controlPanel.Visible = false
-    controlPanel.Active = true
-    controlPanel.Draggable = true
     controlPanel.Parent = screenGui
 
-    -- 标题栏
+    -- 标题栏（用于拖动整个面板）
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
     titleBar.Size = UDim2.new(1, 0, 0, 30)
     titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    titleBar.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     titleBar.BorderSizePixel = 0
     titleBar.Active = true
     titleBar.Draggable = true
     titleBar.Parent = controlPanel
 
+    -- 标题文本
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "TitleLabel"
-    titleLabel.Size = UDim2.new(1, -40, 1, 0)
+    titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
     titleLabel.Position = UDim2.new(0, 5, 0, 0)
     titleLabel.Text = "漂浮控制面板"
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.TextSize = 16
+    titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = titleBar
 
+    -- 关闭按钮
     local closeButton = Instance.new("TextButton")
     closeButton.Name = "CloseButton"
-    closeButton.Size = UDim2.new(0, 30, 0, 30)
-    closeButton.Position = UDim2.new(1, -30, 0, 0)
+    closeButton.Size = UDim2.new(0, 25, 0, 25)
+    closeButton.Position = UDim2.new(1, -30, 0, 2)
     closeButton.Text = "X"
     closeButton.TextColor3 = Color3.new(1, 1, 1)
-    closeButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-    closeButton.BorderSizePixel = 0
+    closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeButton.TextSize = 14
     closeButton.Parent = titleBar
 
-    -- 内容区域
+    -- 功能区
     local contentFrame = Instance.new("Frame")
     contentFrame.Name = "ContentFrame"
     contentFrame.Size = UDim2.new(1, 0, 1, -30)
@@ -380,80 +389,86 @@ local function CreateMobileGUI()
     -- 速度控制
     local speedLabel = Instance.new("TextLabel")
     speedLabel.Name = "SpeedLabel"
-    speedLabel.Size = UDim2.new(1, -20, 0, 30)
-    speedLabel.Position = UDim2.new(0, 10, 0, 10)
+    speedLabel.Size = UDim2.new(1, -10, 0, 25)
+    speedLabel.Position = UDim2.new(0, 5, 0, 10)
     speedLabel.Text = "速度: " .. _G.floatSpeed
     speedLabel.TextColor3 = Color3.new(1, 1, 1)
     speedLabel.BackgroundTransparency = 1
-    speedLabel.TextSize = 16
+    speedLabel.TextSize = 14
     speedLabel.Parent = contentFrame
 
+    -- 速度增加按钮
     local speedUpButton = Instance.new("TextButton")
     speedUpButton.Name = "SpeedUp"
-    speedUpButton.Size = UDim2.new(0, 40, 0, 40)
-    speedUpButton.Position = UDim2.new(0.7, 0, 0, 50)
+    speedUpButton.Size = UDim2.new(0, 40, 0, 30)
+    speedUpButton.Position = UDim2.new(0.7, 0, 0, 40)
     speedUpButton.Text = "+"
     speedUpButton.TextSize = 20
     speedUpButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
     speedUpButton.TextColor3 = Color3.new(1, 1, 1)
     speedUpButton.Parent = contentFrame
 
+    -- 速度减少按钮
     local speedDownButton = Instance.new("TextButton")
     speedDownButton.Name = "SpeedDown"
-    speedDownButton.Size = UDim2.new(0, 40, 0, 40)
-    speedDownButton.Position = UDim2.new(0.3, 0, 0, 50)
+    speedDownButton.Size = UDim2.new(0, 40, 0, 30)
+    speedDownButton.Position = UDim2.new(0.3, 0, 0, 40)
     speedDownButton.Text = "-"
     speedDownButton.TextSize = 20
     speedDownButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
     speedDownButton.TextColor3 = Color3.new(1, 1, 1)
     speedDownButton.Parent = contentFrame
 
+    -- 停止按钮
     local stopButton = Instance.new("TextButton")
     stopButton.Name = "Stop"
-    stopButton.Size = UDim2.new(0, 80, 0, 30)
-    stopButton.Position = UDim2.new(0.5, -40, 0, 100)
+    stopButton.Size = UDim2.new(0.8, 0, 0, 30)
+    stopButton.Position = UDim2.new(0.1, 0, 0, 80)
     stopButton.Text = "停止移动"
     stopButton.TextSize = 14
     stopButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
     stopButton.TextColor3 = Color3.new(1, 1, 1)
     stopButton.Parent = contentFrame
 
+    -- 防止旋转按钮
     local fixButton = Instance.new("TextButton")
     fixButton.Name = "FixRotation"
-    fixButton.Size = UDim2.new(0, 100, 0, 30)
-    fixButton.Position = UDim2.new(0.5, -50, 0, 140)
+    fixButton.Size = UDim2.new(0.8, 0, 0, 30)
+    fixButton.Position = UDim2.new(0.1, 0, 0, 120)
     fixButton.Text = "防止旋转: 关闭"
     fixButton.TextSize = 12
     fixButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
     fixButton.TextColor3 = Color3.new(1, 1, 1)
     fixButton.Parent = contentFrame
 
+    -- 方向控制标题
     local directionLabel = Instance.new("TextLabel")
     directionLabel.Name = "DirectionLabel"
-    directionLabel.Size = UDim2.new(1, -20, 0, 20)
-    directionLabel.Position = UDim2.new(0, 10, 0, 180)
+    directionLabel.Size = UDim2.new(1, -10, 0, 20)
+    directionLabel.Position = UDim2.new(0, 5, 0, 160)
     directionLabel.Text = "移动方向"
     directionLabel.TextColor3 = Color3.new(1, 1, 1)
     directionLabel.BackgroundTransparency = 1
-    directionLabel.TextSize = 14
+    directionLabel.TextSize = 12
     directionLabel.Parent = contentFrame
 
+    -- 方向按钮
     local directions = {
-        {name = "上", dir = "up", pos = UDim2.new(0.5, -20, 0, 210)},
-        {name = "下", dir = "down", pos = UDim2.new(0.5, -20, 0, 250)},
-        {name = "前", dir = "forward", pos = UDim2.new(0.2, -20, 0, 230)},
-        {name = "后", dir = "back", pos = UDim2.new(0.8, -20, 0, 230)},
-        {name = "左", dir = "left", pos = UDim2.new(0.05, -20, 0, 230)},
-        {name = "右", dir = "right", pos = UDim2.new(0.95, -20, 0, 230)}
+        {name = "上", dir = "up", pos = UDim2.new(0.5, -20, 0, 185)},
+        {name = "下", dir = "down", pos = UDim2.new(0.5, -20, 0, 220)},
+        {name = "前", dir = "forward", pos = UDim2.new(0.5, -20, 0, 150)},
+        {name = "后", dir = "back", pos = UDim2.new(0.5, -20, 0, 255)},
+        {name = "左", dir = "left", pos = UDim2.new(0.1, 0, 0, 220)},
+        {name = "右", dir = "right", pos = UDim2.new(0.9, -40, 0, 220)}
     }
 
     for i, dirInfo in ipairs(directions) do
         local button = Instance.new("TextButton")
         button.Name = dirInfo.name
-        button.Size = UDim2.new(0, 40, 0, 30)
+        button.Size = UDim2.new(0, 40, 0, 25)
         button.Position = dirInfo.pos
         button.Text = dirInfo.name
-        button.TextSize = 12
+        button.TextSize = 10
         button.BackgroundColor3 = Color3.fromRGB(100, 100, 200)
         button.TextColor3 = Color3.new(1, 1, 1)
         button.Parent = contentFrame
@@ -485,45 +500,13 @@ local function CreateMobileGUI()
     panelButton.Name = "PanelToggle"
     panelButton.Size = UDim2.new(0, 120, 0, 30)
     panelButton.Position = UDim2.new(1, -130, 0, 70)
-    panelButton.Text = "打开控制面板"
+    panelButton.Text = "控制面板"
     panelButton.TextSize = 14
     panelButton.BackgroundColor3 = Color3.fromRGB(100, 100, 200)
     panelButton.TextColor3 = Color3.new(1, 1, 1)
     panelButton.Parent = screenGui
 
-    -- 事件处理
-    speedUpButton.MouseButton1Click:Connect(function()
-        if isPlayerDead then return end
-        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 1, 100)
-        speedLabel.Text = "速度: " .. _G.floatSpeed
-        UpdateAllPartsVelocity()
-    end)
-
-    speedDownButton.MouseButton1Click:Connect(function()
-        if isPlayerDead then return end
-        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 1, 100)
-        speedLabel.Text = "速度: " .. _G.floatSpeed
-        UpdateAllPartsVelocity()
-    end)
-
-    stopButton.MouseButton1Click:Connect(function()
-        if isPlayerDead then return end
-        StopAllParts()
-        speedLabel.Text = "速度: " .. _G.floatSpeed
-    end)
-
-    fixButton.MouseButton1Click:Connect(function()
-        if isPlayerDead then return end
-        local newFixedState = ToggleRotationPrevention()
-        if newFixedState then
-            fixButton.Text = "防止旋转: 开启"
-            fixButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-        else
-            fixButton.Text = "防止旋转: 关闭"
-            fixButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
-        end
-    end)
-
+    -- 按钮功能
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then
             local warningMsg = Instance.new("Message")
@@ -548,14 +531,98 @@ local function CreateMobileGUI()
         end
     end)
 
+    speedUpButton.MouseButton1Click:Connect(function()
+        if isPlayerDead then
+            local warningMsg = Instance.new("Message")
+            warningMsg.Text = "玩家死亡时无法更改漂浮速度"
+            warningMsg.Parent = Workspace
+            task.delay(2, function()
+                warningMsg:Destroy()
+            end)
+            return
+        end
+        
+        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 1, 100)
+        speedLabel.Text = "速度: " .. _G.floatSpeed
+        UpdateAllPartsVelocity()
+
+        local originalColor = speedUpButton.BackgroundColor3
+        speedUpButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        task.delay(0.2, function()
+            speedUpButton.BackgroundColor3 = originalColor
+        end)
+    end)
+
+    speedDownButton.MouseButton1Click:Connect(function()
+        if isPlayerDead then
+            local warningMsg = Instance.new("Message")
+            warningMsg.Text = "玩家死亡时无法更改漂浮速度"
+            warningMsg.Parent = Workspace
+            task.delay(2, function()
+                warningMsg:Destroy()
+            end)
+            return
+        end
+        
+        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 1, 100)
+        speedLabel.Text = "速度: " .. _G.floatSpeed
+        UpdateAllPartsVelocity()
+
+        local originalColor = speedDownButton.BackgroundColor3
+        speedDownButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        task.delay(0.2, function()
+            speedDownButton.BackgroundColor3 = originalColor
+        end)
+    end)
+
+    stopButton.MouseButton1Click:Connect(function()
+        if isPlayerDead then
+            local warningMsg = Instance.new("Message")
+            warningMsg.Text = "玩家死亡时无法操作漂浮功能"
+            warningMsg.Parent = Workspace
+            task.delay(2, function()
+                warningMsg:Destroy()
+            end)
+            return
+        end
+        
+        StopAllParts()
+        speedLabel.Text = "速度: " .. _G.floatSpeed
+
+        local originalColor = stopButton.BackgroundColor3
+        stopButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        task.delay(0.2, function()
+            stopButton.BackgroundColor3 = originalColor
+        end)
+    end)
+
+    fixButton.MouseButton1Click:Connect(function()
+        if isPlayerDead then
+            local warningMsg = Instance.new("Message")
+            warningMsg.Text = "玩家死亡时无法操作防旋转功能"
+            warningMsg.Parent = Workspace
+            task.delay(2, function()
+                warningMsg:Destroy()
+            end)
+            return
+        end
+        
+        local newFixedState = ToggleRotationPrevention()
+        if newFixedState then
+            fixButton.Text = "防止旋转: 开启"
+            fixButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        else
+            fixButton.Text = "防止旋转: 关闭"
+            fixButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
+        end
+    end)
+
     closeButton.MouseButton1Click:Connect(function()
         controlPanel.Visible = false
-        panelButton.Visible = true
     end)
 
     panelButton.MouseButton1Click:Connect(function()
-        controlPanel.Visible = true
-        panelButton.Visible = false
+        controlPanel.Visible = not controlPanel.Visible
     end)
 
     _G.FloatingStateChanged.Event:Connect(function(stateInfo)
@@ -575,7 +642,7 @@ local success, err = pcall(function()
 end)
 
 if not success then
-    warn("初始化失败: " .. tostring(err))
+    warn("GUI创建失败: " .. tostring(err))
 end
 
 print("全局物体漂浮脚本已加载成功!")

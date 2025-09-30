@@ -59,6 +59,11 @@ setupSimulationRadius()
 local mainButton
 local controlPanel
 local speedLabel
+local stopBtn
+local fixBtn
+local speedUp
+local speedDown
+local dirButtons
 
 -- ================= 辅助函数 =================
 local function isPartEligible(part)
@@ -316,6 +321,103 @@ local function CreateMobileGUI()
             controlPanel.Position = UDim2.new(0, controlPanel.Position.X.Offset + delta.X, 0, controlPanel.Position.Y.Offset + delta.Y)
             dragStartPosPanel = input.Position
         end
+    end)
+
+    -- 停止按钮
+    stopBtn = Instance.new("TextButton")
+    stopBtn.Size = UDim2.new(0, 120, 0, 50)
+    stopBtn.Position = UDim2.new(0, 10, 0, 180)  -- 位于控制面板内
+    stopBtn.Text = "停止移动"
+    stopBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 红色
+    stopBtn.TextColor3 = Color3.new(1,1,1)
+    stopBtn.Parent = controlPanel
+    stopBtn.MouseButton1Click:Connect(function()
+        StopAllParts()
+    end)
+
+    -- 防止旋转按钮
+    fixBtn = Instance.new("TextButton")
+    fixBtn.Size = UDim2.new(0, 120, 0, 50)
+    fixBtn.Position = UDim2.new(0, 10, 0, 240)  -- 位于控制面板内
+    fixBtn.Text = "防止旋转"
+    fixBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- 绿色
+    fixBtn.TextColor3 = Color3.new(1,1,1)
+    fixBtn.Parent = controlPanel
+    fixBtn.MouseButton1Click:Connect(function()
+        _G.fixedMode = ToggleRotationPrevention()
+    end)
+
+    -- 速度更改按钮
+    speedUp = Instance.new("TextButton")
+    speedUp.Size = UDim2.new(0, 120, 0, 50)
+    speedUp.Position = UDim2.new(0, 10, 0, 300)  -- 位于控制面板内
+    speedUp.Text = "加速"
+    speedUp.BackgroundColor3 = Color3.fromRGB(0, 255, 255)  -- 青色
+    speedUp.TextColor3 = Color3.new(1,1,1)
+    speedUp.Parent = controlPanel
+    speedUp.MouseButton1Click:Connect(function()
+        _G.floatSpeed = _G.floatSpeed + 1
+    end)
+
+    speedDown = Instance.new("TextButton")
+    speedDown.Size = UDim2.new(0, 120, 0, 50)
+    speedDown.Position = UDim2.new(0, 10, 0, 360)  -- 位于控制面板内
+    speedDown.Text = "减速"
+    speedDown.BackgroundColor3 = Color3.fromRGB(255, 255, 0)  -- 黄色
+    speedDown.TextColor3 = Color3.new(1,1,1)
+    speedDown.Parent = controlPanel
+    speedDown.MouseButton1Click:Connect(function()
+        _G.floatSpeed = _G.floatSpeed - 1
+    end)
+
+    -- 方向按钮
+    dirButtons = Instance.new("Frame")
+    dirButtons.Size = UDim2.new(0, 120, 0, 150)
+    dirButtons.Position = UDim2.new(0, 140, 0, 120)
+    dirButtons.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dirButtons.Parent = controlPanel
+
+    local forwardBtn = Instance.new("TextButton")
+    forwardBtn.Size = UDim2.new(0, 120, 0, 50)
+    forwardBtn.Text = "前进"
+    forwardBtn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)  -- 橙色
+    forwardBtn.TextColor3 = Color3.new(1,1,1)
+    forwardBtn.Parent = dirButtons
+    forwardBtn.MouseButton1Click:Connect(function()
+        _G.moveDirectionType = "forward"
+    end)
+
+    local backwardBtn = Instance.new("TextButton")
+    backwardBtn.Size = UDim2.new(0, 120, 0, 50)
+    backwardBtn.Position = UDim2.new(0, 0, 0, 50)
+    backwardBtn.Text = "后退"
+    backwardBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 红色
+    backwardBtn.TextColor3 = Color3.new(1,1,1)
+    backwardBtn.Parent = dirButtons
+    backwardBtn.MouseButton1Click:Connect(function()
+        _G.moveDirectionType = "back"
+    end)
+
+    local leftBtn = Instance.new("TextButton")
+    leftBtn.Size = UDim2.new(0, 120, 0, 50)
+    leftBtn.Position = UDim2.new(0, 0, 0, 100)
+    leftBtn.Text = "左移"
+    leftBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 255)  -- 蓝色
+    leftBtn.TextColor3 = Color3.new(1,1,1)
+    leftBtn.Parent = dirButtons
+    leftBtn.MouseButton1Click:Connect(function()
+        _G.moveDirectionType = "left"
+    end)
+
+    local rightBtn = Instance.new("TextButton")
+    rightBtn.Size = UDim2.new(0, 120, 0, 50)
+    rightBtn.Position = UDim2.new(0, 0, 0, 150)
+    rightBtn.Text = "右移"
+    rightBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- 绿色
+    rightBtn.TextColor3 = Color3.new(1,1,1)
+    rightBtn.Parent = dirButtons
+    rightBtn.MouseButton1Click:Connect(function()
+        _G.moveDirectionType = "right"
     end)
 end
 

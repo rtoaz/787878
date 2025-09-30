@@ -9,6 +9,12 @@ if not LocalPlayer then
     LocalPlayer = Players.LocalPlayer
 end
 
+-- 作者提示
+local authorMessage = Instance.new("Message")
+authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
+authorMessage.Parent = Workspace
+task.delay(3, function() authorMessage:Destroy() end)
+
 -- ================= 全局状态 =================
 _G.processedParts = {}
 _G.floatSpeed = 10

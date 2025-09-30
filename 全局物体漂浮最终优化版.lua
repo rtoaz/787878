@@ -10,8 +10,13 @@ if not LocalPlayer then
 end
 
 -- 作者提示
-local authorMessage = Instance.new("Message")
+local authorMessage = Instance.new("TextLabel")
 authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
+authorMessage.Size = UDim2.new(0, 400, 0, 100)
+authorMessage.Position = UDim2.new(0.5, -200, 0, 10)
+authorMessage.TextColor3 = Color3.fromRGB(255, 255, 255)
+authorMessage.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+authorMessage.BackgroundTransparency = 0.5
 authorMessage.Parent = Workspace
 task.delay(3, function() authorMessage:Destroy() end)
 
@@ -151,7 +156,7 @@ local function ToggleRotationPrevention()
         for _, data in pairs(_G.processedParts) do
             if data.bodyGyro and data.bodyGyro.Parent then
                 data.bodyGyro:Destroy()
-                data.bodyGyro = nil
+                data.bodyGyro = nil  -- 将销毁后的 bodyGyro 设置为 nil
             end
         end
         return false
@@ -218,7 +223,7 @@ local function CreateMobileGUI()
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
     panelToggle.Position = UDim2.new(1, -130, 0, 70)
     panelToggle.Text = "控制面板"
-    panelToggle.BackgroundColor3 = Color3.fromRGB(0, 0, 255)  -- 纯蓝色
+    panelToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
@@ -258,7 +263,7 @@ local function CreateMobileGUI()
     speedUp.Size = UDim2.new(0.4,0,0,30)
     speedUp.Position = UDim2.new(0.05,0,0,50)
     speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(0, 0, 255)  -- 纯蓝色
+    speedUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
     speedUp.TextColor3 = Color3.new(1,1,1)
     speedUp.Parent = content
 
@@ -267,7 +272,7 @@ local function CreateMobileGUI()
     speedDown.Size = UDim2.new(0.4,0,0,30)
     speedDown.Position = UDim2.new(0.55,0,0,50)
     speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(0, 0, 255)  -- 纯蓝色
+    speedDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
     speedDown.TextColor3 = Color3.new(1,1,1)
     speedDown.Parent = content
 
@@ -304,7 +309,7 @@ local function CreateMobileGUI()
         b.Size = UDim2.new(0.15,0,0,35)
         b.Position = info.pos
         b.Text = info.name
-        b.BackgroundColor3 = Color3.fromRGB(0, 0, 255)  -- 纯蓝色
+        b.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
         b.MouseButton1Click:Connect(function()

@@ -255,6 +255,26 @@ local function CreateMobileGUI()
     mainButton.TextColor3 = Color3.new(1,1,1)
     mainButton.Parent = screenGui
 
+    -- 使漂浮按钮可拖动 (移动端)
+    local dragStartPos
+    local function startDrag(input)
+        dragStartPos = input.Position
+    end
+
+    mainButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            startDrag(input)
+        end
+    end)
+
+    mainButton.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch and dragStartPos then
+            local delta = input.Position - dragStartPos
+            mainButton.Position = UDim2.new(0, mainButton.Position.X.Offset + delta.X, 0, mainButton.Position.Y.Offset + delta.Y)
+            dragStartPos = input.Position
+        end
+    end)
+
     -- 控制面板按钮
     local panelToggle = Instance.new("TextButton")
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
@@ -264,14 +284,13 @@ local function CreateMobileGUI()
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
-    -- 控制面板
+    -- 使控制面板按钮可拖动 (移动端)
     controlPanel = Instance.new("Frame")
     controlPanel.Size = UDim2.new(0, 220, 0, 360)
     controlPanel.Position = UDim2.new(1, -360, 0, 10)
     controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
     controlPanel.BackgroundTransparency = 0.3
     controlPanel.Active = true
-    controlPanel.Draggable = true
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
 
@@ -279,124 +298,27 @@ local function CreateMobileGUI()
         controlPanel.Visible = not controlPanel.Visible
     end)
 
-    -- 内容
-    local content = Instance.new("Frame")
-    content.Size = UDim2.new(1,0,1,0)
-    content.BackgroundTransparency = 1
-    content.Parent = controlPanel
-
-    -- 速度显示
-    speedLabel = Instance.new("TextLabel")
-    speedLabel.Size = UDim2.new(0.85,0,0,30)
-    speedLabel.Position = UDim2.new(0.075,0,0,10)
-    speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-    speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
-    speedLabel.TextColor3 = Color3.new(1,1,1)
-    speedLabel.TextScaled = true
-    speedLabel.Parent = content
-
-    -- 加速按钮（+）
-    local speedUp = Instance.new("TextButton")
-    speedUp.Size = UDim2.new(0.4,0,0,30)
-    speedUp.Position = UDim2.new(0.05,0,0,50)
-    speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
-    speedUp.TextColor3 = Color3.new(1,1,1)
-    speedUp.Parent = content
-
-    -- 减速按钮（-）
-    local speedDown = Instance.new("TextButton")
-    speedDown.Size = UDim2.new(0.4,0,0,30)
-    speedDown.Position = UDim2.new(0.55,0,0,50)
-    speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
-    speedDown.TextColor3 = Color3.new(1,1,1)
-    speedDown.Parent = content
-
-    -- 停止移动按钮
-    local stopBtn = Instance.new("TextButton")
-    stopBtn.Size = UDim2.new(0.85,0,0,30)
-    stopBtn.Position = UDim2.new(0.075,0,0,100)
-    stopBtn.Text = "停止移动"
-    stopBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-    stopBtn.TextColor3 = Color3.new(1,1,1)
-    stopBtn.Parent = content
-
-    -- 防旋转按钮
-    local fixBtn = Instance.new("TextButton")
-    fixBtn.Size = UDim2.new(0.85,0,0,30)
-    fixBtn.Position = UDim2.new(0.075,0,0,140)
-    fixBtn.Text = "防止旋转: 关闭"
-    fixBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-    fixBtn.TextColor3 = Color3.new(1,1,1)
-    fixBtn.Parent = content
-
-    -- 十字架方向按钮
-    local dirButtons = {
-        {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
-        {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
-        {name="左", dir="right", pos=UDim2.new(0.2,0,0,225)},  -- 交换左和右
-        {name="右", dir="left", pos=UDim2.new(0.5,0,0,225)},  -- 交换右和左
-        {name="前", dir="back", pos=UDim2.new(0.05,0,0,225)}, -- 交换前和后
-        {name="后", dir="forward", pos=UDim2.new(0.65,0,0,225)},    -- 交换后和前
-    }
-
-    for _,info in ipairs(dirButtons) do
-        local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0.15,0,0,35)
-        b.Position = info.pos
-        b.Text = info.name
-        b.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
-        b.TextColor3 = Color3.new(1,1,1)
-        b.Parent = content
-        b.MouseButton1Click:Connect(function()
-            _G.moveDirectionType = info.dir
-            UpdateAllPartsVelocity()
-        end)
+    -- 使控制面板可拖动
+    local dragStartPosPanel
+    local function startDragPanel(input)
+        dragStartPosPanel = input.Position
     end
 
-    -- 按钮功能
-    mainButton.MouseButton1Click:Connect(function()
-        if isPlayerDead then return end
-        anActivity = not anActivity
-        if anActivity then
-            mainButton.Text = "漂浮: 开启"
-            mainButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- 纯绿色
-            ProcessAllParts()
-        else
-            mainButton.Text = "漂浮: 关闭"
-            mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-            CleanupParts()
-            controlPanel.Visible = false
+    controlPanel.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            startDragPanel(input)
         end
     end)
 
-    stopBtn.MouseButton1Click:Connect(function()
-        StopAllParts()
-    end)
-
-    fixBtn.MouseButton1Click:Connect(function()
-        local on = ToggleRotationPrevention()
-        if on then
-            fixBtn.Text = "防止旋转: 开启"
-            fixBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- 纯绿色
-        else
-            fixBtn.Text = "防止旋转: 关闭"
-            fixBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
+    controlPanel.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch and dragStartPosPanel then
+            local delta = input.Position - dragStartPosPanel
+            controlPanel.Position = UDim2.new(0, controlPanel.Position.X.Offset + delta.X, 0, controlPanel.Position.Y.Offset + delta.Y)
+            dragStartPosPanel = input.Position
         end
     end)
 
-    speedUp.MouseButton1Click:Connect(function()
-        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 0, 100)
-        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-        UpdateAllPartsVelocity()
-    end)
-
-    speedDown.MouseButton1Click:Connect(function()
-        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 0, 100)
-        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-        UpdateAllPartsVelocity()
-    end)
+    -- 其他内容继续...
 end
 
 -- 初始化

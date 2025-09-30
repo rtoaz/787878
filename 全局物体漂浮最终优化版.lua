@@ -209,7 +209,7 @@ local function CreateMobileGUI()
 
     -- 主开关按钮（扁平化）
     mainButton = Instance.new("TextButton")
-    mainButton.Size = UDim2.new(0, 180, 0, 40)  -- 调整宽度和高度
+    mainButton.Size = UDim2.new(0.85, 0, 0, 40)  -- 更新宽度为85%
     mainButton.Position = UDim2.new(1, -190, 0, 10)  -- 调整位置
     mainButton.Text = "漂浮: 关闭"
     mainButton.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
@@ -294,18 +294,20 @@ local function CreateMobileGUI()
 
     -- 十字架方向按钮
     local dirButtons = {
-        {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
-        {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
-        {name="左", dir="left", pos=UDim2.new(0.2,0,0,225)},
+        {name="上", dir="up", pos=UDim2.new(0.3,0,0,190)},
+        {name="下", dir="down", pos=UDim2.new(0.3,0,0,260)},
+        {name="左", dir="left", pos=UDim2.new(0.1,0,0,225)},
         {name="右", dir="right", pos=UDim2.new(0.5,0,0,225)},
         {name="前", dir="forward", pos=UDim2.new(0.05,0,0,225)}, -- 左的左边
         {name="后", dir="back", pos=UDim2.new(0.65,0,0,225)},    -- 右的右边
     }
 
+    -- 调整十字架按钮居中
+    local centerX = (1 - 0.15) / 2 -- 居中计算
     for _,info in ipairs(dirButtons) do
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.15,0,0,35)
-        b.Position = info.pos
+        b.Position = UDim2.new(centerX,0,0,info.pos.Y.Offset)  -- 调整位置，确保居中
         b.Text = info.name
         b.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
         b.TextColor3 = Color3.new(1,1,1)

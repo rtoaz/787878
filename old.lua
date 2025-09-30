@@ -59,15 +59,15 @@ local function setupDeathDetection()
     local function onCharacterAdded(character)
         -- 重置死亡状态
         isPlayerDead = false
-        
+
         -- 等待Humanoid加载
         local humanoid = character:WaitForChild("Humanoid")
-        
+
         -- 监听死亡事件
         if humanoidDiedConnection then
             humanoidDiedConnection:Disconnect()
         end
-        
+
         humanoidDiedConnection = humanoid.Died:Connect(function()
             isPlayerDead = true
             print("玩家死亡，自动关闭漂浮功能")
@@ -76,13 +76,13 @@ local function setupDeathDetection()
             if anActivity then
                 anActivity = false
                 CleanupParts()
-                
+
                 -- 更新GUI状态
                 if mainButton then
                     mainButton.Text = "漂浮: 关闭"
                     mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
                 end
-                
+
                 -- 显示死亡提示
                 local deathMessage = Instance.new("Message")
                 deathMessage.Text = "检测到玩家死亡，已自动关闭漂浮功能"
@@ -93,14 +93,25 @@ local function setupDeathDetection()
             end
         end)
     end
-    
+
     -- 监听角色添加事件
     if characterAddedConnection then
         characterAddedConnection:Disconnect()
     end
     
-    characterAddedConnection = LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-    
+    characterAddedConnection = LocalPlayer.CharacterAdded:Connect(function(character)
+        -- 重生时关闭漂浮功能并更新GUI
+        if anActivity then
+            anActivity = false
+            CleanupParts()
+            if mainButton then
+                mainButton.Text = "漂浮: 关闭"
+                mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            end
+        end
+        onCharacterAdded(character) -- 调用角色添加函数
+    end)
+
     -- 如果已经有角色，立即设置检测
     if LocalPlayer.Character then
         onCharacterAdded(LocalPlayer.Character)

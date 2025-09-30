@@ -1,8 +1,15 @@
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
-if not game:IsLoaded() then game.Loaded:Wait() end
+-- 等待游戏加载完成
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+-- 等待本地玩家加载
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
     Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
@@ -29,6 +36,24 @@ _G.fixedMode = false
 local isPlayerDead = false
 local anActivity = false
 local updateConnection = nil
+
+-- 设置模拟半径
+local function setupSimulationRadius()
+    local success, err = pcall(function()
+        RunService.Heartbeat:Connect(function()
+            pcall(function()
+                sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+                sethiddenproperty(LocalPlayer, "MaxSimulationRadius", math.huge)
+            end)
+        end)
+    end)
+
+    if not success then
+        warn("模拟半径设置失败: " .. tostring(err))
+    end
+end
+
+setupSimulationRadius()
 
 -- GUI 引用
 local mainButton

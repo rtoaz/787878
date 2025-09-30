@@ -1,7 +1,6 @@
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 local LocalPlayer = Players.LocalPlayer
@@ -25,7 +24,6 @@ _G.fixedMode = false
 local isPlayerDead = false
 local anActivity = false
 local updateConnection = nil
-local simulationHeartbeat = nil
 
 -- GUI 引用
 local mainButton
@@ -246,15 +244,20 @@ local function CreateMobileGUI()
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
-    -- 控制面板（透明）
+    -- 控制面板（半透明 + 可移动）
     controlPanel = Instance.new("Frame")
     controlPanel.Size = UDim2.new(0, 220, 0, 320)
     controlPanel.Position = UDim2.new(1, -360, 0, 10)
-    controlPanel.BackgroundTransparency = 1  -- 透明
+    controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    controlPanel.BackgroundTransparency = 0.3
+    controlPanel.Active = true
+    controlPanel.Draggable = true
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
 
-    panelToggle.MouseButton1Click:Connect(function() controlPanel.Visible = not controlPanel.Visible end)
+    panelToggle.MouseButton1Click:Connect(function()
+        controlPanel.Visible = not controlPanel.Visible
+    end)
 
     -- 内容
     local content = Instance.new("Frame")
@@ -280,13 +283,21 @@ local function CreateMobileGUI()
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
 
-    -- 方向按钮（蓝色）
-    local directions = {"up","down","forward","back","left","right"}
-    for i,dir in ipairs(directions) do
+    -- 中文方向按钮（蓝色）
+    local directions = {
+        {"上","up"},
+        {"下","down"},
+        {"前","forward"},
+        {"后","back"},
+        {"左","left"},
+        {"右","right"},
+    }
+    for i,info in ipairs(directions) do
+        local text,dir = info[1],info[2]
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.4,0,0,28)
         b.Position = UDim2.new(0.05 + 0.45*((i-1)%2),0,0,110+35*math.floor((i-1)/2))
-        b.Text = dir
+        b.Text = text
         b.BackgroundColor3 = Color3.fromRGB(50,120,220)
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content

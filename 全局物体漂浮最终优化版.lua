@@ -28,19 +28,9 @@ local updateConnection = nil
 -- GUI 引用
 local mainButton
 local controlPanel
-local notifyLabel
 local speedLabel
 
 -- ================= 辅助函数 =================
-local function showNotify(msg)
-    if not notifyLabel then return end
-    notifyLabel.Text = msg
-    notifyLabel.Visible = true
-    task.delay(0.5, function()   -- 显示时间改为0.5秒
-        notifyLabel.Visible = false
-    end)
-end
-
 local function isPartEligible(part)
     if not part or not part:IsA("BasePart") then return false end
     if part.Anchored then return false end
@@ -184,7 +174,6 @@ local function onCharacterAdded(char)
     if controlPanel then
         controlPanel.Visible = false
     end
-    showNotify("漂浮已关闭")
     local humanoid = char:WaitForChild("Humanoid")
     if humanoid then
         if humanoidDiedConnection then humanoidDiedConnection:Disconnect() end
@@ -200,7 +189,6 @@ local function onCharacterAdded(char)
                 if controlPanel then
                     controlPanel.Visible = false
                 end
-                showNotify("漂浮已关闭")
             end
         end)
     end
@@ -215,17 +203,6 @@ local function CreateMobileGUI()
     screenGui.Name = "MobileFloatingControl"
     screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
-
-    -- 通知标签
-    notifyLabel = Instance.new("TextLabel")
-    notifyLabel.Size = UDim2.new(0, 200, 0, 40)
-    notifyLabel.Position = UDim2.new(0.5, -100, 0.5, -20)
-    notifyLabel.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    notifyLabel.BackgroundTransparency = 0.3
-    notifyLabel.TextColor3 = Color3.new(1,1,1)
-    notifyLabel.TextScaled = true
-    notifyLabel.Visible = false
-    notifyLabel.Parent = screenGui
 
     -- 主开关按钮
     mainButton = Instance.new("TextButton")
@@ -266,10 +243,38 @@ local function CreateMobileGUI()
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
 
+    -- 速度显示
+    speedLabel = Instance.new("TextLabel")
+    speedLabel.Size = UDim2.new(0.85,0,0,30)
+    speedLabel.Position = UDim2.new(0.075,0,0,10)
+    speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
+    speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    speedLabel.TextColor3 = Color3.new(1,1,1)
+    speedLabel.TextScaled = true
+    speedLabel.Parent = content
+
+    -- 加速按钮（+）
+    local speedUp = Instance.new("TextButton")
+    speedUp.Size = UDim2.new(0.4,0,0,30)
+    speedUp.Position = UDim2.new(0.05,0,0,50)
+    speedUp.Text = "+"
+    speedUp.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    speedUp.TextColor3 = Color3.new(1,1,1)
+    speedUp.Parent = content
+
+    -- 减速按钮（-）
+    local speedDown = Instance.new("TextButton")
+    speedDown.Size = UDim2.new(0.4,0,0,30)
+    speedDown.Position = UDim2.new(0.55,0,0,50)
+    speedDown.Text = "-"
+    speedDown.BackgroundColor3 = Color3.fromRGB(50,120,220)
+    speedDown.TextColor3 = Color3.new(1,1,1)
+    speedDown.Parent = content
+
     -- 停止移动按钮
     local stopBtn = Instance.new("TextButton")
     stopBtn.Size = UDim2.new(0.85,0,0,30)
-    stopBtn.Position = UDim2.new(0.075,0,0,20)
+    stopBtn.Position = UDim2.new(0.075,0,0,100)
     stopBtn.Text = "停止移动"
     stopBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
     stopBtn.TextColor3 = Color3.new(1,1,1)
@@ -278,39 +283,11 @@ local function CreateMobileGUI()
     -- 防旋转按钮
     local fixBtn = Instance.new("TextButton")
     fixBtn.Size = UDim2.new(0.85,0,0,30)
-    fixBtn.Position = UDim2.new(0.075,0,0,60)
+    fixBtn.Position = UDim2.new(0.075,0,0,140)
     fixBtn.Text = "防止旋转: 关闭"
     fixBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
-
-    -- 速度显示
-    speedLabel = Instance.new("TextLabel")
-    speedLabel.Size = UDim2.new(0.85,0,0,30)
-    speedLabel.Position = UDim2.new(0.075,0,0,100)
-    speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-    speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
-    speedLabel.TextColor3 = Color3.new(1,1,1)
-    speedLabel.TextScaled = true
-    speedLabel.Parent = content
-
-    -- 加速按钮（改成 +）
-    local speedUp = Instance.new("TextButton")
-    speedUp.Size = UDim2.new(0.4,0,0,30)
-    speedUp.Position = UDim2.new(0.05,0,0,140)
-    speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(50,120,220)
-    speedUp.TextColor3 = Color3.new(1,1,1)
-    speedUp.Parent = content
-
-    -- 减速按钮（改成 -）
-    local speedDown = Instance.new("TextButton")
-    speedDown.Size = UDim2.new(0.4,0,0,30)
-    speedDown.Position = UDim2.new(0.55,0,0,140)
-    speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(50,120,220)
-    speedDown.TextColor3 = Color3.new(1,1,1)
-    speedDown.Parent = content
 
     -- 中文方向按钮
     local directions = {
@@ -349,13 +326,11 @@ local function CreateMobileGUI()
             mainButton.BackgroundColor3 = Color3.fromRGB(200,50,50)
             CleanupParts()
             controlPanel.Visible = false
-            showNotify("漂浮已关闭")
         end
     end)
 
     stopBtn.MouseButton1Click:Connect(function()
         StopAllParts()
-        showNotify("漂浮已关闭")
     end)
 
     fixBtn.MouseButton1Click:Connect(function()

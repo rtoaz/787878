@@ -11,7 +11,7 @@ end
 
 -- 作者提示
 local authorMessage = Instance.new("Message")
-authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，可能会出现颜色故障\n由Star_Skater53帮忙优化"
+authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
 authorMessage.Parent = Workspace
 task.delay(3, function() authorMessage:Destroy() end)
 
@@ -196,6 +196,9 @@ end
 Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if Players.LocalPlayer.Character then onCharacterAdded(Players.LocalPlayer.Character) end
 
+-- 定义鲜艳的蓝色
+local brightBlue = Color3.fromRGB(0, 150, 255)
+
 -- GUI 创建
 local function CreateMobileGUI()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -204,10 +207,10 @@ local function CreateMobileGUI()
     screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
 
-    -- 主开关按钮
+    -- 主开关按钮（扁平化）
     mainButton = Instance.new("TextButton")
-    mainButton.Size = UDim2.new(0, 120, 0, 50)
-    mainButton.Position = UDim2.new(1, -130, 0, 10)
+    mainButton.Size = UDim2.new(0, 180, 0, 40)  -- 调整宽度和高度
+    mainButton.Position = UDim2.new(1, -190, 0, 10)  -- 调整位置
     mainButton.Text = "漂浮: 关闭"
     mainButton.BackgroundColor3 = Color3.fromRGB(255,50,50)  -- 鲜艳红色
     mainButton.TextColor3 = Color3.new(1,1,1)
@@ -218,7 +221,7 @@ local function CreateMobileGUI()
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
     panelToggle.Position = UDim2.new(1, -130, 0, 70)
     panelToggle.Text = "控制面板"
-    panelToggle.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
+    panelToggle.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
 
@@ -258,7 +261,7 @@ local function CreateMobileGUI()
     speedUp.Size = UDim2.new(0.4,0,0,30)
     speedUp.Position = UDim2.new(0.05,0,0,50)
     speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
+    speedUp.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
     speedUp.TextColor3 = Color3.new(1,1,1)
     speedUp.Parent = content
 
@@ -267,7 +270,7 @@ local function CreateMobileGUI()
     speedDown.Size = UDim2.new(0.4,0,0,30)
     speedDown.Position = UDim2.new(0.55,0,0,50)
     speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
+    speedDown.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
     speedDown.TextColor3 = Color3.new(1,1,1)
     speedDown.Parent = content
 
@@ -304,7 +307,7 @@ local function CreateMobileGUI()
         b.Size = UDim2.new(0.15,0,0,35)
         b.Position = info.pos
         b.Text = info.name
-        b.BackgroundColor3 = Color3.fromRGB(0,100,255)  -- 鲜艳蓝色
+        b.BackgroundColor3 = brightBlue  -- 鲜艳蓝色
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
         b.MouseButton1Click:Connect(function()

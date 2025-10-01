@@ -119,7 +119,7 @@ local function UpdateAllPartsVelocity()
         end
         return
     end
-    local dir = CalculateMoveDirection()
+    local dir = CalculateMoveDirection()  -- 每帧计算当前的方向
     for part, data in pairs(_G.processedParts) do
         if data.bodyVelocity and data.bodyVelocity.Parent then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
@@ -356,8 +356,8 @@ local function CreateMobileGUI()
         {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
         {name="左", dir="left", pos=UDim2.new(0.2,0,0,225)},
         {name="右", dir="right", pos=UDim2.new(0.5,0,0,225)},
-        {name="前", dir="forward", pos=UDim2.new(0.05,0,0,225)}, -- 左的左边
-        {name="后", dir="back", pos=UDim2.new(0.65,0,0,225)},    -- 右的右边
+        {name="前", dir="forward", pos=UDim2.new(0.05,0,0,225)},
+        {name="后", dir="back", pos=UDim2.new(0.65,0,0,225)},
     }
 
     for _,info in ipairs(dirButtons) do
@@ -369,8 +369,7 @@ local function CreateMobileGUI()
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
         b.MouseButton1Click:Connect(function()
-            _G.moveDirectionType = info.dir
-            UpdateAllPartsVelocity()
+            _G.moveDirectionType = info.dir  -- 点击时设置方向
         end)
     end
 

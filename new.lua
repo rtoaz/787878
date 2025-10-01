@@ -180,20 +180,20 @@ local function ToggleRotationPrevention()
         -- 禁用防止旋转，允许物体自由旋转
         _G.fixedMode = false
         for _, data in pairs(_G.processedParts) do
-            if data.bodyGyro and data.bodyGyro.Parent then
+            if data.bodyGyro then
                 data.bodyGyro:Destroy()
-                data.bodyGyro = nil  -- 将销毁后的 bodyGyro 设置为 nil
+                data.bodyGyro = nil  -- 设置为 nil
             end
         end
         return false
     else
-        -- 启用防止旋转，禁止物体旋转
+        -- 启用防止旋转
         _G.fixedMode = true
-        for _, data in pairs(_G.processedParts) do
-            if data.bodyGyro and not data.bodyGyro.Parent then
-                -- 添加或恢复旋转防止机制
+        for part, data in pairs(_G.processedParts) do
+            if not data.bodyGyro then
+                -- 如果没有 BodyGyro，添加一个
                 data.bodyGyro = Instance.new("BodyGyro")
-                data.bodyGyro.Parent = data.part
+                data.bodyGyro.Parent = part
                 data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
                 data.bodyGyro.P = 1000
                 data.bodyGyro.D = 100

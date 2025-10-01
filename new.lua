@@ -119,7 +119,7 @@ local function UpdateAllPartsVelocity()
         end
         return
     end
-    local dir = CalculateMoveDirection()
+    local dir = CalculateMoveDirection()  -- 每帧计算当前的方向
     for part, data in pairs(_G.processedParts) do
         if data.bodyVelocity and data.bodyVelocity.Parent then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
@@ -369,8 +369,7 @@ local function CreateMobileGUI()
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
         b.MouseButton1Click:Connect(function()
-            _G.moveDirectionType = info.dir
-            UpdateAllPartsVelocity()
+            _G.moveDirectionType = info.dir  -- 点击时设置方向
         end)
     end
 

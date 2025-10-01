@@ -327,15 +327,15 @@ local function CreateMobileGUI()
     fixBtn.Parent = content
 
     -- 十字架方向按钮
-local dirButtons = {
-    {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
-    {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
-    {name="右", dir="right", pos=UDim2.new(0.2,0,0,225)},
-    {name="左", dir="left", pos=UDim2.new(0.5,0,0,225)},
-    {name="后", dir="back", pos=UDim2.new(0.05,0,0,225)},
-    {name="前", dir="forward", pos=UDim2.new(0.65,0,0,225)},
+    local dirButtons = {
+        {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
+        {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
+        {name="左", dir="left", pos=UDim2.new(0.05,0,0,225)},
+        {name="右", dir="right", pos=UDim2.new(0.65,0,0,225)},
+        {name="前", dir="forward", pos=UDim2.new(0.2,0,0,225)},
+        {name="后", dir="back", pos=UDim2.new(0.5,0,0,225)},
     }
-    
+
     for _,info in ipairs(dirButtons) do
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.15,0,0,35)

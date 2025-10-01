@@ -17,7 +17,7 @@ if not LocalPlayer then
 end
 
 -- 作者提示
-local authorMessage = Instance.new("TextLabel")
+local authorMessage = Instance.new("Message")
 authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
 authorMessage.Size = UDim2.new(0, 400, 0, 100)
 authorMessage.Position = UDim2.new(0.5, -200, 0, 10)
@@ -138,6 +138,10 @@ local function ProcessPart(part)
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
         return
     end
+
+    -- 设置网络所有权为本地玩家
+    part:SetNetworkOwner(Players.LocalPlayer)
+
     for _, child in ipairs(part:GetChildren()) do
         if child:IsA("BodyMover") then pcall(function() child:Destroy() end) end
     end

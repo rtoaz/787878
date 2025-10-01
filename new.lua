@@ -138,13 +138,24 @@ local function ProcessPart(part)
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
         return
     end
+    
+    -- 设置网络所有权给本地玩家进行控制
+    if not part:IsDescendantOf(Players.LocalPlayer.Character) then
+        part:SetNetworkOwner(LocalPlayer)  -- 将网络所有权交给本地玩家
+    end
+    
+    -- 清理之前的BodyMover组件
     for _, child in ipairs(part:GetChildren()) do
         if child:IsA("BodyMover") then pcall(function() child:Destroy() end) end
     end
+
+    -- 创建新的BodyVelocity
     local bv = Instance.new("BodyVelocity")
     bv.Parent = part
     bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
     bv.Velocity = CalculateMoveDirection() * _G.floatSpeed
+
+    -- 如果启用了固定模式，添加BodyGyro
     local bg = nil
     if _G.fixedMode then
         bg = Instance.new("BodyGyro")
@@ -153,6 +164,7 @@ local function ProcessPart(part)
         bg.P = 1000
         bg.D = 100
     end
+
     _G.processedParts[part] = {bodyVelocity = bv, bodyGyro = bg}
 end
 
@@ -173,6 +185,13 @@ local function StopAllParts()
     _G.floatSpeed = 0
     UpdateAllPartsVelocity()
     CleanupParts()
+
+    -- 停止所有物体的网络所有权
+    for part, data in pairs(_G.processedParts) do
+        if part and part:IsDescendantOf(Workspace) then
+            part:SetNetworkOwner(nil)  -- 将网络所有权交还给服务器
+        end
+    end
 end
 
 local function ToggleRotationPrevention()

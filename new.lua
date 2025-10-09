@@ -100,6 +100,31 @@ local function CalculateMoveDirection()
     if lockedDirection then
         return lockedDirection
     else
+        local dir = _G.moveDirectionType
+        if dir == "up" then return Vector3.new(0,1,0) end
+        if dir == "down" then return Vector3.new(0,-1,0) end
+        if dir == "forward" then
+            local v = Vector3.new(lastCameraDirection.X,0,lastCameraDirection.Z)
+            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+        end
+        if dir == "back" then
+            local v = -Vector3.new(lastCameraDirection.X,0,lastCameraDirection.Z)
+            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+        end
+        if dir == "right" then
+            local cam = workspace.CurrentCamera
+            if cam then
+                local right = Vector3.new(cam.CFrame.RightVector.X,0,cam.CFrame.RightVector.Z)
+                return (right.Magnitude > 0 and right.Unit) or Vector3.new()
+            end
+        end
+        if dir == "left" then
+            local cam = workspace.CurrentCamera
+            if cam then
+                local left = -Vector3.new(cam.CFrame.RightVector.X,0,cam.CFrame.RightVector.Z)
+                return (left.Magnitude > 0 and left.Unit) or Vector3.new()
+            end
+        end
         return Vector3.new(0,1,0)
     end
 end
@@ -212,13 +237,6 @@ local function onCharacterAdded(char)
     isPlayerDead = false
     anActivity = false
     CleanupParts()
-    if mainButton then
-        mainButton.Text = "漂浮: 关闭"
-        mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    end
-    if controlPanel then
-        controlPanel.Visible = false
-    end
     startCameraTracking() -- 新增：重生后恢复相机监听
     local humanoid = char:WaitForChild("Humanoid")
     if humanoid then
@@ -228,15 +246,8 @@ local function onCharacterAdded(char)
             if anActivity then
                 anActivity = false
                 CleanupParts()
-                if mainButton then
-                    mainButton.Text = "漂浮: 关闭"
-                    mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                end
-                if controlPanel then
-                    controlPanel.Visible = false
-                end
             end
-            startCameraTracking() -- 死亡后也恢复监听
+            startCameraTracking() -- 死亡后恢复监听
         end)
     end
 end
@@ -372,6 +383,30 @@ local function CreateMobileGUI()
     fixBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
+
+    -- 十字架方向按钮
+    local dirButtons = {
+        {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
+        {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
+        {name="左", dir="left", pos=UDim2.new(0.05,0,0,225)},
+        {name="右", dir="right", pos=UDim2.new(0.65,0,0,225)},
+        {name="前", dir="forward", pos=UDim2.new(0.2,0,0,225)},
+        {name="后", dir="back", pos=UDim2.new(0.5,0,0,225)},
+    }
+
+    for _,info in ipairs(dirButtons) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0.15,0,0,35)
+        b.Position = info.pos
+        b.Text = info.name
+        b.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+        b.TextColor3 = Color3.new(1,1,1)
+        b.Parent = content
+        b.MouseButton1Click:Connect(function()
+            _G.moveDirectionType = info.dir
+            UpdateAllPartsVelocity()
+        end)
+    end
 
     -- 主按钮逻辑修改：漂浮开启锁定相机方向，关闭恢复监听
     mainButton.MouseButton1Click:Connect(function()

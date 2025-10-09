@@ -16,9 +16,9 @@ if not LocalPlayer then
     LocalPlayer = Players.LocalPlayer
 end
 
--- 作者提示
+-- 作者提示（已移除“注意”那句）
 local authorMessage = Instance.new("Message")
-authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n注意：此脚本的控制按键最好不要短时间内连续点击并长按，会出现颜色故障\n由Star_Skater53帮忙优化"
+authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53帮忙优化"
 authorMessage.Parent = Workspace
 task.delay(3, function() authorMessage:Destroy() end)
 
@@ -233,6 +233,41 @@ end
 Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if Players.LocalPlayer.Character then onCharacterAdded(Players.LocalPlayer.Character) end
 
+-- ================ 可拖动辅助（支持鼠标与触控） ================
+local function makeDraggable(guiObject)
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+            dragInput = input
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
 -- GUI 创建
 local function CreateMobileGUI()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -250,7 +285,10 @@ local function CreateMobileGUI()
     mainButton.TextColor3 = Color3.new(1,1,1)
     mainButton.Parent = screenGui
 
-    -- 控制面板按钮
+    -- 使主按钮可拖动
+    makeDraggable(mainButton)
+
+    -- 打开和关闭控制面板按钮
     local panelToggle = Instance.new("TextButton")
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
     panelToggle.Position = UDim2.new(1, -130, 0, 120)  -- 向上偏移
@@ -258,6 +296,9 @@ local function CreateMobileGUI()
     panelToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
+
+    -- 使控制面板切换按钮可拖动
+    makeDraggable(panelToggle)
 
     -- 控制面板
     controlPanel = Instance.new("Frame")

@@ -94,39 +94,52 @@ local function isPartEligible(part)
     return true
 end
 
--- 修改为使用锁定相机方向
+-- 上/下始终有效，前后左右根据漂浮锁定状态计算
 local function CalculateMoveDirection()
     if isPlayerDead then return Vector3.new(0,0,0) end
-    if lockedDirection then
-        return lockedDirection
-    else
-        local dir = _G.moveDirectionType
-        if dir == "up" then return Vector3.new(0,1,0) end
-        if dir == "down" then return Vector3.new(0,-1,0) end
-        if dir == "forward" then
-            local v = Vector3.new(lastCameraDirection.X,0,lastCameraDirection.Z)
-            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
-        end
-        if dir == "back" then
-            local v = -Vector3.new(lastCameraDirection.X,0,lastCameraDirection.Z)
-            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
-        end
-        if dir == "right" then
-            local cam = workspace.CurrentCamera
-            if cam then
-                local right = Vector3.new(cam.CFrame.RightVector.X,0,cam.CFrame.RightVector.Z)
-                return (right.Magnitude > 0 and right.Unit) or Vector3.new()
-            end
-        end
-        if dir == "left" then
-            local cam = workspace.CurrentCamera
-            if cam then
-                local left = -Vector3.new(cam.CFrame.RightVector.X,0,cam.CFrame.RightVector.Z)
-                return (left.Magnitude > 0 and left.Unit) or Vector3.new()
-            end
-        end
-        return Vector3.new(0,1,0)
+
+    local dir = _G.moveDirectionType
+    -- 上 / 下 独立控制
+    if dir == "up" then
+        return Vector3.new(0, 1, 0)
+    elseif dir == "down" then
+        return Vector3.new(0, -1, 0)
     end
+
+    -- 其他方向根据锁定状态
+    if lockedDirection then
+        if dir == "forward" then
+            return lockedDirection
+        elseif dir == "back" then
+            return -lockedDirection
+        elseif dir == "left" or dir == "right" then
+            local camera = workspace.CurrentCamera
+            if camera then
+                local right = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z).Unit
+                if dir == "left" then right = -right end
+                return right
+            end
+        end
+    else
+        -- 未锁定时实时使用相机方向
+        local camera = workspace.CurrentCamera
+        if not camera then return Vector3.new(0,1,0) end
+        if dir == "forward" then
+            local v = Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
+            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+        elseif dir == "back" then
+            local v = -Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
+            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+        elseif dir == "right" then
+            local v = Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
+            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+        elseif dir == "left" then
+            local v = -Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
+            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+        end
+    end
+
+    return Vector3.new(0,1,0)
 end
 
 local function CleanupParts()

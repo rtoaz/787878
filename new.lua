@@ -16,7 +16,7 @@ if not LocalPlayer then
     LocalPlayer = Players.LocalPlayer
 end
 
--- 作者提示（已移除“注意”那句）
+-- 作者提示
 local authorMessage = Instance.new("Message")
 authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53帮忙优化"
 authorMessage.Parent = Workspace

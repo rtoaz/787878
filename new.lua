@@ -16,7 +16,7 @@ if not LocalPlayer then
     LocalPlayer = Players.LocalPlayer
 end
 
--- 作者提示
+-- 作者提示（已移除“注意”那句）
 local authorMessage = Instance.new("Message")
 authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53帮忙优化"
 authorMessage.Parent = Workspace
@@ -55,16 +55,21 @@ end
 
 setupSimulationRadius()
 
--- 相机监听相关函数
+-- 相机监听相关函数（降低监听频率）
 local function startCameraTracking()
     if cameraListener then return end
-    cameraListener = RunService.RenderStepped:Connect(function()
-        local camera = workspace.CurrentCamera
-        if camera then
-            local look = camera.CFrame.LookVector
-            lastCameraDirection = Vector3.new(look.X, 0, look.Z)
-            if lastCameraDirection.Magnitude > 0 then
-                lastCameraDirection = lastCameraDirection.Unit
+    local lastUpdate = 0
+    cameraListener = RunService.Heartbeat:Connect(function()
+        local now = tick()
+        if now - lastUpdate >= 0.2 then
+            lastUpdate = now
+            local camera = workspace.CurrentCamera
+            if camera then
+                local look = camera.CFrame.LookVector
+                lastCameraDirection = Vector3.new(look.X, 0, look.Z)
+                if lastCameraDirection.Magnitude > 0 then
+                    lastCameraDirection = lastCameraDirection.Unit
+                end
             end
         end
     end)
@@ -94,7 +99,7 @@ local function isPartEligible(part)
     return true
 end
 
--- 上/下始终有效，前后左右根据漂浮锁定状态计算
+-- 修复：上/下始终有效，前后左右根据漂浮锁定状态计算
 local function CalculateMoveDirection()
     if isPlayerDead then return Vector3.new(0,0,0) end
 
@@ -417,6 +422,19 @@ local function CreateMobileGUI()
         b.Parent = content
         b.MouseButton1Click:Connect(function()
             _G.moveDirectionType = info.dir
+
+            -- 点击前/后/左/右时立即刷新一次相机方向
+            if info.dir == "forward" or info.dir == "back" or info.dir == "left" or info.dir == "right" then
+                local camera = workspace.CurrentCamera
+                if camera then
+                    local look = camera.CFrame.LookVector
+                    lastCameraDirection = Vector3.new(look.X, 0, look.Z)
+                    if lastCameraDirection.Magnitude > 0 then
+                        lastCameraDirection = lastCameraDirection.Unit
+                    end
+                end
+            end
+
             UpdateAllPartsVelocity()
         end)
     end

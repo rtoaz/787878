@@ -16,16 +16,11 @@ if not LocalPlayer then
     LocalPlayer = Players.LocalPlayer
 end
 
--- 作者提示
-local authorMessage = Instance.new("Message")
-authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53帮忙优化"
-authorMessage.Parent = Workspace
-task.delay(3, function() authorMessage:Destroy() end)
-
--- ================= 全局状态 =================
-_G.processedParts = {}
-_G.floatSpeed = 10
+-- 全局配置
+_G.processedParts = _G.processedParts or {}
+_G.floatSpeed = _G.floatSpeed or 10
 _G.moveDirectionType = "up"  -- 设置初始漂浮方向为向上
+_G.cachedMoveVector = Vector3.new(0,1,0)  -- 缓存的移动方向（点击时更新）
 _G.fixedMode = false  -- 默认允许旋转
 
 local isPlayerDead = false
@@ -42,22 +37,16 @@ local function setupSimulationRadius()
             end)
         end)
     end)
-
     if not success then
-        warn("模拟半径设置失败: " .. tostring(err))
+        warn("设置 SimulationRadius 失败: ", err)
     end
 end
 
-setupSimulationRadius()
-
--- GUI 引用
-local mainButton
-local controlPanel
-local speedLabel
-
--- ================= 辅助函数 =================
+-- 判断部件是否可处理
 local function isPartEligible(part)
     if not part or not part:IsA("BasePart") then return false end
+    if part.Locked then return false end
+    if part.CanCollide == false then return false end
     if part.Anchored then return false end
     if part:IsDescendantOf(LocalPlayer.Character or {}) then return false end
     local parent = part.Parent
@@ -67,42 +56,56 @@ local function isPartEligible(part)
     return true
 end
 
-local function CalculateMoveDirection()
-    if isPlayerDead then return Vector3.new(0,0,0) end
+-- ================ 缓存相机方向的函数 ================
+-- 点击方向按钮时调用，缓存一次方向
+local function CacheMoveDirection(dirType)
     local camera = workspace.CurrentCamera
-    if not camera then return Vector3.new(0,1,0) end
-    local dir = _G.moveDirectionType
-    if dir == "up" then return Vector3.new(0,1,0) end
-    if dir == "down" then return Vector3.new(0,-1,0) end
-    if dir == "forward" then
-        local v = Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
-        return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+    if not camera then return end
+    if dirType == "up" then
+        _G.cachedMoveVector = Vector3.new(0,1,0)
+        return
     end
-    if dir == "back" then
-        local v = -Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
-        return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+    if dirType == "down" then
+        _G.cachedMoveVector = Vector3.new(0,-1,0)
+        return
     end
-    if dir == "right" then
-        local v = Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
-        return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+
+    -- 前/后/左/右 使用摄像机的平面向量（y=0），并单位化
+    if dirType == "forward" then
+        local v = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0,0,0)
+        return
     end
-    if dir == "left" then
-        local v = -Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
-        return (v.Magnitude > 0 and v.Unit) or Vector3.new()
+    if dirType == "back" then
+        local v = -Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0,0,0)
+        return
     end
-    return Vector3.new(0,1,0)
+    if dirType == "right" then
+        local v = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z)
+        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0,0,0)
+        return
+    end
+    if dirType == "left" then
+        local v = -Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z)
+        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0,0,0)
+        return
+    end
 end
 
+-- 替换原 CalculateMoveDirection：直接返回缓存的向量（点击时会更新缓存）
+local function CalculateMoveDirection()
+    if isPlayerDead then return Vector3.new(0,0,0) end
+    return _G.cachedMoveVector or Vector3.new(0,1,0)
+end
+
+-- ================ 修改点结束 ================
 local function CleanupParts()
     for _, data in pairs(_G.processedParts) do
         pcall(function() if data.bodyVelocity then data.bodyVelocity:Destroy() end end)
         pcall(function() if data.bodyGyro then data.bodyGyro:Destroy() end end)
     end
     _G.processedParts = {}
-    if updateConnection then
-        updateConnection:Disconnect()
-        updateConnection = nil
-    end
 end
 
 local function UpdateAllPartsVelocity()
@@ -133,22 +136,21 @@ local function ProcessPart(part)
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
         return
     end
-    for _, child in ipairs(part:GetChildren()) do
-        if child:IsA("BodyMover") then pcall(function() child:Destroy() end) end
-    end
+
     local bv = Instance.new("BodyVelocity")
-    bv.Parent = part
-    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.MaxForce = Vector3.new(1e8, 1e8, 1e8)
     bv.Velocity = CalculateMoveDirection() * _G.floatSpeed
+    bv.P = 1e4
+    bv.Parent = part
+
     local bg = nil
     if _G.fixedMode then
         bg = Instance.new("BodyGyro")
+        bg.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
         bg.Parent = part
-        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.P = 1000
-        bg.D = 100
     end
-    _G.processedParts[part] = {bodyVelocity = bv, bodyGyro = bg}
+
+    _G.processedParts[part] = { bodyVelocity = bv, bodyGyro = bg }
 end
 
 local function ProcessAllParts()
@@ -158,6 +160,10 @@ local function ProcessAllParts()
         return
     end
     if updateConnection then updateConnection:Disconnect() end
+
+    -- 在批量处理前，根据当前的 moveDirectionType 缓存一次相机方向（这样第一次开启就能生效）
+    CacheMoveDirection(_G.moveDirectionType)
+
     for _, v in ipairs(Workspace:GetDescendants()) do
         pcall(function() ProcessPart(v) end)
     end
@@ -166,69 +172,20 @@ end
 
 local function StopAllParts()
     _G.floatSpeed = 0
-    UpdateAllPartsVelocity()
     CleanupParts()
-end
-
-local function ToggleRotationPrevention()
-    if _G.fixedMode then
-        -- 禁用防止旋转，允许物体自由旋转
-        _G.fixedMode = false
-        for _, data in pairs(_G.processedParts) do
-            if data.bodyGyro then
-                data.bodyGyro:Destroy()
-                data.bodyGyro = nil  -- 设置为 nil
-            end
-        end
-        return false
-    else
-        -- 启用防止旋转
-        _G.fixedMode = true
-        for part, data in pairs(_G.processedParts) do
-            if not data.bodyGyro then
-                -- 如果没有 BodyGyro，添加一个
-                data.bodyGyro = Instance.new("BodyGyro")
-                data.bodyGyro.Parent = part
-                data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                data.bodyGyro.P = 1000
-                data.bodyGyro.D = 100
-            end
-        end
-        return true
+    if updateConnection then
+        updateConnection:Disconnect()
+        updateConnection = nil
     end
-end
-
--- 死亡/重生
-local humanoidDiedConnection = nil
-local function onCharacterAdded(char)
-    isPlayerDead = false
     anActivity = false
-    CleanupParts()
-    if mainButton then
-        mainButton.Text = "漂浮: 关闭"
-        mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-    end
-    if controlPanel then
-        controlPanel.Visible = false
-    end
+end
+
+local function onCharacterAdded(char)
     local humanoid = char:WaitForChild("Humanoid")
-    if humanoid then
-        if humanoidDiedConnection then humanoidDiedConnection:Disconnect() end
-        humanoidDiedConnection = humanoid.Died:Connect(function()
-            isPlayerDead = true
-            if anActivity then
-                anActivity = false
-                CleanupParts()
-                if mainButton then
-                    mainButton.Text = "漂浮: 关闭"
-                    mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-                end
-                if controlPanel then
-                    controlPanel.Visible = false
-                end
-            end
-        end)
-    end
+    humanoid.Died:Connect(function()
+        isPlayerDead = true
+        StopAllParts()
+    end)
 end
 Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if Players.LocalPlayer.Character then onCharacterAdded(Players.LocalPlayer.Character) end
@@ -261,6 +218,12 @@ local function makeDraggable(guiObject)
         end
     end)
 
+    guiObject.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
@@ -272,81 +235,47 @@ end
 local function CreateMobileGUI()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MobileFloatingControl"
-    screenGui.Parent = playerGui
+    screenGui.Name = "FloatControlUI"
     screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
 
-    -- 主开关按钮
-    mainButton = Instance.new("TextButton")
-    mainButton.Size = UDim2.new(0, 120, 0, 50)
-    mainButton.Position = UDim2.new(1, -130, 0, 50)  -- 向上偏移
-    mainButton.Text = "漂浮: 关闭"
-    mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-    mainButton.TextColor3 = Color3.new(1,1,1)
+    local mainButton = Instance.new("TextButton")
+    mainButton.Size = UDim2.new(0, 60, 0, 60)
+    mainButton.Position = UDim2.new(0, 10, 1, -70)
+    mainButton.Text = "漂浮"
     mainButton.Parent = screenGui
 
-    -- 使主按钮可拖动
-    makeDraggable(mainButton)
-
-    -- 打开和关闭控制面板按钮
-    local panelToggle = Instance.new("TextButton")
-    panelToggle.Size = UDim2.new(0, 120, 0, 30)
-    panelToggle.Position = UDim2.new(1, -130, 0, 120)  -- 向上偏移
-    panelToggle.Text = "控制面板"
-    panelToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
-    panelToggle.TextColor3 = Color3.new(1,1,1)
-    panelToggle.Parent = screenGui
-
-    -- 使控制面板切换按钮可拖动
-    makeDraggable(panelToggle)
-
-    -- 控制面板
-    controlPanel = Instance.new("Frame")
-    controlPanel.Size = UDim2.new(0, 220, 0, 360)
-    controlPanel.Position = UDim2.new(1, -360, 0, 10)
-    controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    controlPanel.BackgroundTransparency = 0.3
-    controlPanel.Active = true
-    controlPanel.Draggable = true
+    local controlPanel = Instance.new("Frame")
+    controlPanel.Size = UDim2.new(0, 300, 0, 420)
+    controlPanel.Position = UDim2.new(0, 10, 1, -500)
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
 
-    panelToggle.MouseButton1Click:Connect(function()
-        controlPanel.Visible = not controlPanel.Visible
-    end)
+    makeDraggable(controlPanel)
 
-    -- 内容
     local content = Instance.new("Frame")
-    content.Size = UDim2.new(1,0,1,0)
-    content.BackgroundTransparency = 1
+    content.Size = UDim2.new(1, -10, 1, -10)
+    content.Position = UDim2.new(0, 5, 0, 5)
     content.Parent = controlPanel
 
-    -- 速度显示
-    speedLabel = Instance.new("TextLabel")
+    local speedLabel = Instance.new("TextLabel")
     speedLabel.Size = UDim2.new(0.85,0,0,30)
     speedLabel.Position = UDim2.new(0.075,0,0,10)
     speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-    speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    speedLabel.BackgroundTransparency = 1
     speedLabel.TextColor3 = Color3.new(1,1,1)
-    speedLabel.TextScaled = true
     speedLabel.Parent = content
 
-    -- 加速按钮（+）
     local speedUp = Instance.new("TextButton")
     speedUp.Size = UDim2.new(0.4,0,0,30)
     speedUp.Position = UDim2.new(0.05,0,0,50)
-    speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
-    speedUp.TextColor3 = Color3.new(1,1,1)
+    speedUp.Text = "速度+"
     speedUp.Parent = content
 
-    -- 减速按钮（-）
     local speedDown = Instance.new("TextButton")
     speedDown.Size = UDim2.new(0.4,0,0,30)
     speedDown.Position = UDim2.new(0.55,0,0,50)
-    speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)  -- 更亮的蓝色
-    speedDown.TextColor3 = Color3.new(1,1,1)
+    speedDown.Text = "速度-"
     speedDown.Parent = content
 
     -- 停止移动按钮
@@ -387,6 +316,7 @@ local function CreateMobileGUI()
         b.Parent = content
         b.MouseButton1Click:Connect(function()
             _G.moveDirectionType = info.dir
+            CacheMoveDirection(info.dir)      -- 点击时把当前相机方向缓存下来（只执行一次）
             UpdateAllPartsVelocity()
         end)
     end
@@ -395,14 +325,10 @@ local function CreateMobileGUI()
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
         anActivity = not anActivity
+        controlPanel.Visible = anActivity
         if anActivity then
-            mainButton.Text = "漂浮: 开启"
-            mainButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- 纯绿色
             ProcessAllParts()
         else
-            mainButton.Text = "漂浮: 关闭"
-            mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- 纯红色
-            CleanupParts()
             controlPanel.Visible = false
         end
     end)
@@ -410,6 +336,15 @@ local function CreateMobileGUI()
     stopBtn.MouseButton1Click:Connect(function()
         StopAllParts()
     end)
+
+    local function ToggleRotationPrevention()
+        _G.fixedMode = not _G.fixedMode
+        if _G.fixedMode then
+            return true
+        else
+            return false
+        end
+    end
 
     fixBtn.MouseButton1Click:Connect(function()
         local on = ToggleRotationPrevention()

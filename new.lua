@@ -111,35 +111,35 @@ local function CalculateMoveDirection()
         return Vector3.new(0, -1, 0)
     end
 
-    -- 其他方向根据锁定状态
-    if lockedDirection then
+    -- 判断当前是否漂浮中
+    local isFloating = anActivity and lockedDirection ~= nil
+    local camera = workspace.CurrentCamera
+    if not camera then return Vector3.new(0,1,0) end
+
+    if isFloating then
+        -- 漂浮中使用锁定方向
         if dir == "forward" then
             return lockedDirection
         elseif dir == "back" then
             return -lockedDirection
         elseif dir == "left" or dir == "right" then
-            local camera = workspace.CurrentCamera
-            if camera then
-                local right = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z).Unit
-                if dir == "left" then right = -right end
-                return right
-            end
+            local right = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z).Unit
+            if dir == "left" then right = -right end
+            return right
         end
     else
-        -- 未锁定时实时使用相机方向
-        local camera = workspace.CurrentCamera
-        if not camera then return Vector3.new(0,1,0) end
+        -- 未漂浮时使用实时相机方向
         if dir == "forward" then
-            local v = Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
+            local v = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         elseif dir == "back" then
-            local v = -Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
+            local v = -Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         elseif dir == "right" then
-            local v = Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
+            local v = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         elseif dir == "left" then
-            local v = -Vector3.new(camera.CFrame.RightVector.X,0,camera.CFrame.RightVector.Z)
+            local v = -Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         end
     end

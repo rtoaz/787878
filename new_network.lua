@@ -146,6 +146,7 @@ local function CleanupParts()
     end
 end
 
+-- ✅ 修复防旋转逻辑
 local function UpdateAllPartsVelocity()
     if isPlayerDead then
         for _, data in pairs(_G.processedParts) do
@@ -160,8 +161,18 @@ local function UpdateAllPartsVelocity()
         if data.bodyVelocity and data.bodyVelocity.Parent then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
         end
-        if _G.fixedMode and data.bodyGyro and data.bodyGyro.Parent then
-            data.bodyGyro.CFrame = part.CFrame
+        if _G.fixedMode then
+            -- 完全锁死旋转
+            pcall(function()
+                part.RotVelocity = Vector3.zero
+                part.AssemblyAngularVelocity = Vector3.zero
+            end)
+            if data.bodyGyro and data.bodyGyro.Parent then
+                data.bodyGyro.CFrame = part.CFrame
+                data.bodyGyro.P = 5000
+                data.bodyGyro.D = 500
+                data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            end
         end
     end
 end

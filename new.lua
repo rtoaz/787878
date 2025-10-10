@@ -37,6 +37,11 @@ local lastCameraDirection = Vector3.new(0, 1, 0)
 local lockedDirection = nil
 local cameraListener = nil
 
+-- 人为点击时即时记录的相机 CFrame（用于点击后立即生效）
+local manualCameraCFrame = nil
+local manualCameraUpdateTime = 0
+local MANUAL_CAMERA_EXPIRE = 0.6 -- 多少秒内优先使用手动记录
+
 -- 设置模拟半径
 local function setupSimulationRadius()
     local success, err = pcall(function()
@@ -100,6 +105,7 @@ local function isPartEligible(part)
 end
 
 -- 修复：上/下始终有效，前后左右根据漂浮锁定状态计算
+-- 未漂浮时优先使用 manualCameraCFrame（若在短时间内被点击更新），否则使用实时 camera
 local function CalculateMoveDirection()
     if isPlayerDead then return Vector3.new(0,0,0) end
 
@@ -113,33 +119,53 @@ local function CalculateMoveDirection()
 
     -- 判断当前是否漂浮中
     local isFloating = anActivity and lockedDirection ~= nil
+
+    -- 获取用于计算的相机 CFrame（如果有手动记录且未过期，优先用它）
     local camera = workspace.CurrentCamera
-    if not camera then return Vector3.new(0,1,0) end
+    local camToUseCFrame = nil
+    if not isFloating then
+        if manualCameraCFrame and tick() - manualCameraUpdateTime <= MANUAL_CAMERA_EXPIRE then
+            camToUseCFrame = manualCameraCFrame
+        else
+            camToUseCFrame = camera and camera.CFrame or nil
+        end
+    end
 
     if isFloating then
-        -- 漂浮中使用锁定方向
+        -- 漂浮中使用锁定方向（前/后），左右根据锁定方向计算横向向量（更一致）
         if dir == "forward" then
             return lockedDirection
         elseif dir == "back" then
             return -lockedDirection
         elseif dir == "left" or dir == "right" then
-            local right = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z).Unit
-            if dir == "left" then right = -right end
-            return right
+            -- 由锁定的前向计算右向： right = (z,0,-x) 相对于 lockedDirection = (x,0,z)
+            local ld = lockedDirection
+            if ld and ld.Magnitude > 0 then
+                local rightFromLocked = Vector3.new(ld.Z, 0, -ld.X)
+                if rightFromLocked.Magnitude > 0 then
+                    rightFromLocked = rightFromLocked.Unit
+                    if dir == "left" then
+                        return -rightFromLocked
+                    else
+                        return rightFromLocked
+                    end
+                end
+            end
         end
     else
-        -- 未漂浮时使用实时相机方向
+        -- 未漂浮：用 camToUseCFrame 计算实时方向（若 camToUseCFrame 为 nil，则返回向上作为兜底）
+        if not camToUseCFrame then return Vector3.new(0,1,0) end
         if dir == "forward" then
-            local v = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+            local v = Vector3.new(camToUseCFrame.LookVector.X, 0, camToUseCFrame.LookVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         elseif dir == "back" then
-            local v = -Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+            local v = -Vector3.new(camToUseCFrame.LookVector.X, 0, camToUseCFrame.LookVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         elseif dir == "right" then
-            local v = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z)
+            local v = Vector3.new(camToUseCFrame.RightVector.X, 0, camToUseCFrame.RightVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         elseif dir == "left" then
-            local v = -Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z)
+            local v = -Vector3.new(camToUseCFrame.RightVector.X, 0, camToUseCFrame.RightVector.Z)
             return (v.Magnitude > 0 and v.Unit) or Vector3.new()
         end
     end
@@ -255,6 +281,14 @@ local function onCharacterAdded(char)
     isPlayerDead = false
     anActivity = false
     CleanupParts()
+    -- 同步 GUI：如果 GUI 已存在，确保显示为关闭状态
+    if mainButton then
+        mainButton.Text = "漂浮: 关闭"
+        mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+    if controlPanel then
+        controlPanel.Visible = false
+    end
     startCameraTracking() -- 新增：重生后恢复相机监听
     local humanoid = char:WaitForChild("Humanoid")
     if humanoid then
@@ -265,7 +299,17 @@ local function onCharacterAdded(char)
                 anActivity = false
                 CleanupParts()
             end
+            -- 玩家死亡时同步关闭 GUI（如果存在）
+            if mainButton then
+                mainButton.Text = "漂浮: 关闭"
+                mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            end
+            if controlPanel then
+                controlPanel.Visible = false
+            end
             startCameraTracking() -- 死亡后恢复监听
+            -- 清除锁定方向
+            lockedDirection = nil
         end)
     end
 end
@@ -423,10 +467,13 @@ local function CreateMobileGUI()
         b.MouseButton1Click:Connect(function()
             _G.moveDirectionType = info.dir
 
-            -- 点击前/后/左/右时立即刷新一次相机方向
+            -- 点击前/后/左/右时立即刷新一次相机位置（记录 camera CFrame）
             if info.dir == "forward" or info.dir == "back" or info.dir == "left" or info.dir == "right" then
                 local camera = workspace.CurrentCamera
                 if camera then
+                    manualCameraCFrame = camera.CFrame
+                    manualCameraUpdateTime = tick()
+                    -- 也更新 lastCameraDirection 以保持一致（备用）
                     local look = camera.CFrame.LookVector
                     lastCameraDirection = Vector3.new(look.X, 0, look.Z)
                     if lastCameraDirection.Magnitude > 0 then

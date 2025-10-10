@@ -2,79 +2,59 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 
--- 等待游戏加载完成
-if not game:IsLoaded() then
-    game.Loaded:Wait()
-end
+--=============== 加载与初始化 ===============
+if not game:IsLoaded() then game.Loaded:Wait() end
 
--- 等待本地玩家加载
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
     Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
     LocalPlayer = Players.LocalPlayer
 end
 
--- 作者提示
+--=============== 作者提示信息 ===============
 local authorMessage = Instance.new("Message")
 authorMessage.Text = "全局物体漂浮脚本 - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53帮忙优化"
 authorMessage.Parent = Workspace
 task.delay(3, function() authorMessage:Destroy() end)
 
--- ================= 全局状态 =================
-_G.processedParts = {}
-_G.floatSpeed = 10
-_G.moveDirectionType = "up"  -- 设置初始漂浮方向为向上
-_G.fixedMode = false  -- 默认允许旋转
+--=============== 全局变量与状态 ===============
+_G.processedParts = {}               -- 被控制的部件记录表
+_G.floatSpeed = 10                   -- 默认漂浮速度
+_G.moveDirectionType = "up"          -- 当前移动方向（初始为向上）
+_G.fixedMode = false                 -- 是否防止旋转
 
-local isPlayerDead = false
-local anActivity = false
-local updateConnection = nil
+local isPlayerDead = false           -- 玩家死亡状态
+local anActivity = false             -- 是否处于漂浮模式
+local updateConnection = nil         -- 更新连接引用
+local lockedDirection = nil          -- 锁定的漂浮方向
+local cameraListener = nil           -- 相机监听引用
 
--- 相机方向记录与监听
-local lastCameraDirection = Vector3.new(0, 1, 0)
-local lockedDirection = nil
-local cameraListener = nil
-
--- 手动点击时即时记录的相机 CFrame（用于点击后立即生效）
+-- 手动点击时即时记录的相机方向
 local manualCameraCFrame = nil
-local manualCameraUpdateTime = 0
-local MANUAL_CAMERA_EXPIRE = 0.6 -- 点击后优先使用手动记录的时间窗口（秒）
+local manualCameraTime = 0
+local MANUAL_TIMEOUT = 0.6           -- 手动方向优先时长（秒）
 
--- 设置模拟半径
-local function setupSimulationRadius()
-    local success, err = pcall(function()
-        RunService.Heartbeat:Connect(function()
-            pcall(function()
-                sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
-                sethiddenproperty(LocalPlayer, "MaxSimulationRadius", math.huge)
-            end)
-        end)
+--=============== 模拟半径设置（保证控制全局物体） ===============
+RunService.Heartbeat:Connect(function()
+    pcall(function()
+        sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+        sethiddenproperty(LocalPlayer, "MaxSimulationRadius", math.huge)
     end)
+end)
 
-    if not success then
-        warn("模拟半径设置失败: " .. tostring(err))
-    end
-end
-
-setupSimulationRadius()
-
--- 相机监听相关函数（降低监听频率）
+--=============== 相机监听（降低频率防卡顿） ===============
+local lastCameraDir = Vector3.new(0, 1, 0)
 local function startCameraTracking()
     if cameraListener then return end
     local lastUpdate = 0
     cameraListener = RunService.Heartbeat:Connect(function()
-        local now = tick()
-        if now - lastUpdate >= 0.2 then
-            lastUpdate = now
-            local camera = workspace.CurrentCamera
-            if camera then
-                local look = camera.CFrame.LookVector
-                lastCameraDirection = Vector3.new(look.X, 0, look.Z)
-                if lastCameraDirection.Magnitude > 0 then
-                    lastCameraDirection = lastCameraDirection.Unit
-                end
+        if tick() - lastUpdate >= 0.2 then -- 每 0.2 秒更新一次
+            lastUpdate = tick()
+            local cam = workspace.CurrentCamera
+            if cam then
+                local v = cam.CFrame.LookVector
+                lastCameraDir = Vector3.new(v.X, 0, v.Z).Unit
             end
         end
     end)
@@ -87,99 +67,54 @@ local function stopCameraTracking()
     end
 end
 
--- GUI 引用
-local mainButton
-local controlPanel
-local speedLabel
-
--- ================= 辅助函数 =================
-local function isPartEligible(part)
-    if not part or not part:IsA("BasePart") then return false end
-    if part.Anchored then return false end
-    if part:IsDescendantOf(LocalPlayer.Character or {}) then return false end
-    local parent = part.Parent
-    if not parent then return true end
-    if parent:FindFirstChildOfClass("Humanoid") then return false end
-    if parent:FindFirstChild("Head") then return false end
-    return true
-end
-
--- 上/下始终有效，前后左右根据漂浮锁定状态计算
--- 未漂浮时优先使用 manualCameraCFrame（若在短时间内被点击更新），否则使用实时 camera
+--=============== 计算移动方向（修正版） ===============
 local function CalculateMoveDirection()
-    if isPlayerDead then return Vector3.new(0,0,0) end
-
     local dir = _G.moveDirectionType
-    -- 上 / 下 独立控制
-    if dir == "up" then
-        return Vector3.new(0, 1, 0)
-    elseif dir == "down" then
-        return Vector3.new(0, -1, 0)
+    if dir == "up" then return Vector3.new(0, 1, 0) end
+    if dir == "down" then return Vector3.new(0, -1, 0) end
+
+    local cam = workspace.CurrentCamera
+    if not cam then return Vector3.new(0,1,0) end
+
+    local now = tick()
+    local camCF = cam.CFrame
+
+    -- 未漂浮时优先使用手动记录的相机方向（例如点击前/后/左/右时）
+    if not anActivity then
+        if manualCameraCFrame and now - manualCameraTime < MANUAL_TIMEOUT then
+            camCF = manualCameraCFrame
+        end
     end
 
-    -- 判断当前是否漂浮中
-    local isFloating = anActivity and lockedDirection ~= nil
+    -- 前方向：漂浮时锁定，未漂浮时实时
+    local forward = (anActivity and lockedDirection)
+        或 Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
 
-    -- 获取用于计算的相机 CFrame（如果有手动记录且未过期，优先用它）
-    local camera = workspace.CurrentCamera
-    local camToUseCFrame = nil
-    if not isFloating then
-        if manualCameraCFrame and tick() - manualCameraUpdateTime <= MANUAL_CAMERA_EXPIRE then
-            camToUseCFrame = manualCameraCFrame
-        else
-            camToUseCFrame = camera and camera.CFrame or nil
-        end
-    else
-        -- 漂浮中我们仍需要相机当作备份（但前/后使用 lockedDirection）
-        camToUseCFrame = camera and camera.CFrame or nil
-    end
-
-    -- 如果漂浮中则锁定方向，否则使用 camToUseCFrame（实时或手动记录）
-    if isFloating then
-        -- 漂浮中使用锁定方向（前/后），左右由 lockedDirection 推导横向向量（修正过）
-        if dir == "forward" then
-            return lockedDirection
-        elseif dir == "back" then
-            return -lockedDirection
-        elseif dir == "left" or dir == "right" then
-            local ld = lockedDirection
-            if ld and ld.Magnitude > 0 then
-                local rightFromLocked = Vector3.new(-ld.Z, 0, ld.X)
-                if rightFromLocked.Magnitude > 0 then
-                    rightFromLocked = rightFromLocked.Unit
-                    if dir == "left" then
-                        return -rightFromLocked
-                    else
-                        return rightFromLocked
-                    end
-                end
-            end
-        end
-    else
-        -- 未漂浮时使用 camToUseCFrame 计算实时方向（若 camToUseCFrame 为 nil，则返回向上作为兜底）
-        if not camToUseCFrame then return Vector3.new(0,1,0) end
-        if dir == "forward" then
-            local v = Vector3.new(camToUseCFrame.LookVector.X, 0, camToUseCFrame.LookVector.Z)
-            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
-        elseif dir == "back" then
-            local v = -Vector3.new(camToUseCFrame.LookVector.X, 0, camToUseCFrame.LookVector.Z)
-            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
-        elseif dir == "right" then
-            local v = Vector3.new(camToUseCFrame.RightVector.X, 0, camToUseCFrame.RightVector.Z)
-            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
-        elseif dir == "left" then
-            local v = -Vector3.new(camToUseCFrame.RightVector.X, 0, camToUseCFrame.RightVector.Z)
-            return (v.Magnitude > 0 and v.Unit) or Vector3.new()
-        end
+    -- ✅ Roblox 坐标系修正版：
+    --   Forward = LookVector
+    --   Back    = -LookVector
+    --   Right   = (Z, 0, -X)
+    --   Left    = (-Z, 0, X)
+    if dir == "forward" then
+        return forward
+    elseif dir == "back" then
+        return -forward
+    elseif dir == "right" then
+        local right = Vector3.new(forward.Z, 0, -forward.X).Unit
+        return right
+    elseif dir == "left" then
+        local right = Vector3.new(forward.Z, 0, -forward.X).Unit
+        return -right
     end
 
     return Vector3.new(0,1,0)
 end
 
+--=============== 部件控制核心函数 ===============
 local function CleanupParts()
     for _, data in pairs(_G.processedParts) do
-        pcall(function() if data.bodyVelocity then data.bodyVelocity:Destroy() end end)
-        pcall(function() if data.bodyGyro then data.bodyGyro:Destroy() end end)
+        if data.bodyVelocity then data.bodyVelocity:Destroy() end
+        if data.bodyGyro then data.bodyGyro:Destroy() end
     end
     _G.processedParts = {}
     if updateConnection then
@@ -189,105 +124,58 @@ local function CleanupParts()
 end
 
 local function UpdateAllPartsVelocity()
-    if isPlayerDead then
-        for _, data in pairs(_G.processedParts) do
-            if data.bodyVelocity and data.bodyVelocity.Parent then
-                data.bodyVelocity.Velocity = Vector3.new(0,0,0)
-            end
-        end
-        return
-    end
     local dir = CalculateMoveDirection()
-    for part, data in pairs(_G.processedParts) do
-        if data.bodyVelocity and data.bodyVelocity.Parent then
+    for _, data in pairs(_G.processedParts) do
+        if data.bodyVelocity then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
         end
-        if _G.fixedMode and data.bodyGyro and data.bodyGyro.Parent then
-            data.bodyGyro.CFrame = part.CFrame
+        if _G.fixedMode and data.bodyGyro then
+            data.bodyGyro.CFrame = data.bodyGyro.Parent.CFrame
         end
     end
 end
 
 local function ProcessPart(part)
-    if isPlayerDead then return end
-    if not isPartEligible(part) then return end
-    local entry = _G.processedParts[part]
-    if entry and entry.bodyVelocity and entry.bodyVelocity.Parent then
-        entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
-        return
-    end
-    for _, child in ipairs(part:GetChildren()) do
-        if child:IsA("BodyMover") then pcall(function() child:Destroy() end) end
-    end
+    if not part:IsA("BasePart") or part.Anchored then return end
+    if part:IsDescendantOf(LocalPlayer.Character) then return end
+    if part.Parent and (part.Parent:FindFirstChildOfClass("Humanoid") or part.Parent:FindFirstChild("Head")) then return end
+
     local bv = Instance.new("BodyVelocity")
-    bv.Parent = part
     bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
     bv.Velocity = CalculateMoveDirection() * _G.floatSpeed
+    bv.Parent = part
+
     local bg = nil
     if _G.fixedMode then
         bg = Instance.new("BodyGyro")
-        bg.Parent = part
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.P = 1000
-        bg.D = 100
+        bg.P, bg.D = 1000, 100
+        bg.Parent = part
     end
-    _G.processedParts[part] = {bodyVelocity = bv, bodyGyro = bg}
+
+    _G.processedParts[part] = {bodyVelocity=bv, bodyGyro=bg}
 end
 
 local function ProcessAllParts()
-    if isPlayerDead then
-        anActivity = false
-        CleanupParts()
-        return
-    end
-    if updateConnection then updateConnection:Disconnect() end
-    for _, v in ipairs(Workspace:GetDescendants()) do
-        pcall(function() ProcessPart(v) end)
+    CleanupParts()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        pcall(ProcessPart, v)
     end
     updateConnection = RunService.Heartbeat:Connect(UpdateAllPartsVelocity)
 end
 
 local function StopAllParts()
-    _G.floatSpeed = 0
-    UpdateAllPartsVelocity()
     CleanupParts()
 end
 
-local function ToggleRotationPrevention()
-    if _G.fixedMode then
-        _G.fixedMode = false
-        for _, data in pairs(_G.processedParts) do
-            if data.bodyGyro then
-                data.bodyGyro:Destroy()
-                data.bodyGyro = nil
-            end
-        end
-        return false
-    else
-        _G.fixedMode = true
-        for part, data in pairs(_G.processedParts) do
-            if not data.bodyGyro then
-                data.bodyGyro = Instance.new("BodyGyro")
-                data.bodyGyro.Parent = part
-                data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                data.bodyGyro.P = 1000
-                data.bodyGyro.D = 100
-            end
-        end
-        return true
-    end
-end
-
--- 死亡/重生
-local humanoidDiedConnection = nil
+--=============== 玩家死亡/重生处理 ===============
+local mainButton, controlPanel
 local function SyncGuiToOff()
     if mainButton then
         mainButton.Text = "漂浮: 关闭"
-        mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        mainButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
     end
-    if controlPanel then
-        controlPanel.Visible = false
-    end
+    if controlPanel then controlPanel.Visible = false end
 end
 
 local function onCharacterAdded(char)
@@ -295,251 +183,133 @@ local function onCharacterAdded(char)
     anActivity = false
     CleanupParts()
     SyncGuiToOff()
-    startCameraTracking() -- 新增：重生后恢复相机监听
-    local humanoid = char:WaitForChild("Humanoid")
-    if humanoid then
-        if humanoidDiedConnection then humanoidDiedConnection:Disconnect() end
-        humanoidDiedConnection = humanoid.Died:Connect(function()
-            isPlayerDead = true
-            if anActivity then
-                anActivity = false
-                CleanupParts()
-            end
-            SyncGuiToOff()
-            startCameraTracking() -- 死亡后恢复监听
-            lockedDirection = nil
-        end)
-    end
+    startCameraTracking()
+    local hum = char:WaitForChild("Humanoid")
+    hum.Died:Connect(function()
+        isPlayerDead = true
+        anActivity = false
+        CleanupParts()
+        lockedDirection = nil
+        SyncGuiToOff()
+        startCameraTracking()
+    end)
 end
 Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if Players.LocalPlayer.Character then onCharacterAdded(Players.LocalPlayer.Character) end
 
--- ================ 可拖动辅助（支持鼠标与触控） ================
-local function makeDraggable(guiObject)
-    local dragging = false
-    local dragInput = nil
-    local dragStart = nil
-    local startPos = nil
-
-    local function update(input)
-        local delta = input.Position - dragStart
-        guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-
-    guiObject.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+--=============== 可拖动 GUI 功能 ===============
+local function makeDraggable(gui)
+    local dragging, dragStart, startPos
+    gui.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            dragStart = input.Position
-            startPos = guiObject.Position
-            dragInput = input
-
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    dragInput = nil
-                end
+            dragStart = i.Position
+            startPos = gui.Position
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then dragging=false end
             end)
         end
     end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            update(input)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local delta = i.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
 
--- GUI 创建
+--=============== 创建主界面与控制面板 ===============
 local function CreateMobileGUI()
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MobileFloatingControl"
-    screenGui.Parent = playerGui
-    screenGui.ResetOnSpawn = false
+    local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+    gui.Name = "MobileFloatingControl"
+    gui.ResetOnSpawn = false
 
-    -- 主开关按钮
+    -- 漂浮开关按钮
     mainButton = Instance.new("TextButton")
-    mainButton.Size = UDim2.new(0, 120, 0, 50)
-    mainButton.Position = UDim2.new(1, -130, 0, 50)
+    mainButton.Size = UDim2.new(0,120,0,50)
+    mainButton.Position = UDim2.new(1,-130,0,50)
     mainButton.Text = "漂浮: 关闭"
-    mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    mainButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
     mainButton.TextColor3 = Color3.new(1,1,1)
-    mainButton.Parent = screenGui
+    mainButton.Parent = gui
     makeDraggable(mainButton)
-
-    -- 打开和关闭控制面板按钮
-    local panelToggle = Instance.new("TextButton")
-    panelToggle.Size = UDim2.new(0, 120, 0, 30)
-    panelToggle.Position = UDim2.new(1, -130, 0, 120)
-    panelToggle.Text = "控制面板"
-    panelToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    panelToggle.TextColor3 = Color3.new(1,1,1)
-    panelToggle.Parent = screenGui
-    makeDraggable(panelToggle)
 
     -- 控制面板
     controlPanel = Instance.new("Frame")
-    controlPanel.Size = UDim2.new(0, 220, 0, 360)
-    controlPanel.Position = UDim2.new(1, -360, 0, 10)
+    controlPanel.Size = UDim2.new(0,220,0,320)
+    controlPanel.Position = UDim2.new(1,-360,0,10)
     controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
     controlPanel.BackgroundTransparency = 0.3
-    controlPanel.Active = true
-    controlPanel.Draggable = true
     controlPanel.Visible = false
-    controlPanel.Parent = screenGui
+    controlPanel.Parent = gui
 
-    panelToggle.MouseButton1Click:Connect(function()
-        controlPanel.Visible = not controlPanel.Visible
-    end)
+    -- 控制面板按钮（开关）
+    local panelToggle = Instance.new("TextButton", gui)
+    panelToggle.Size = UDim2.new(0,120,0,30)
+    panelToggle.Position = UDim2.new(1,-130,0,120)
+    panelToggle.Text = "控制面板"
+    panelToggle.BackgroundColor3 = Color3.fromRGB(0,150,255)
+    panelToggle.TextColor3 = Color3.new(1,1,1)
+    makeDraggable(panelToggle)
+    panelToggle.MouseButton1Click:Connect(function() controlPanel.Visible = not controlPanel.Visible end)
 
-    -- 内容
-    local content = Instance.new("Frame")
-    content.Size = UDim2.new(1,0,1,0)
-    content.BackgroundTransparency = 1
-    content.Parent = controlPanel
-
-    -- 速度显示
-    speedLabel = Instance.new("TextLabel")
-    speedLabel.Size = UDim2.new(0.85,0,0,30)
-    speedLabel.Position = UDim2.new(0.075,0,0,10)
-    speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-    speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
-    speedLabel.TextColor3 = Color3.new(1,1,1)
-    speedLabel.TextScaled = true
-    speedLabel.Parent = content
-
-    -- 加速按钮（+）
-    local speedUp = Instance.new("TextButton")
-    speedUp.Size = UDim2.new(0.4,0,0,30)
-    speedUp.Position = UDim2.new(0.05,0,0,50)
-    speedUp.Text = "+"
-    speedUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    speedUp.TextColor3 = Color3.new(1,1,1)
-    speedUp.Parent = content
-
-    -- 减速按钮（-）
-    local speedDown = Instance.new("TextButton")
-    speedDown.Size = UDim2.new(0.4,0,0,30)
-    speedDown.Position = UDim2.new(0.55,0,0,50)
-    speedDown.Text = "-"
-    speedDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    speedDown.TextColor3 = Color3.new(1,1,1)
-    speedDown.Parent = content
-
-    -- 停止移动按钮
-    local stopBtn = Instance.new("TextButton")
-    stopBtn.Size = UDim2.new(0.85,0,0,30)
-    stopBtn.Position = UDim2.new(0.075,0,0,100)
-    stopBtn.Text = "停止移动"
-    stopBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    stopBtn.TextColor3 = Color3.new(1,1,1)
-    stopBtn.Parent = content
-
-    -- 防旋转按钮
-    local fixBtn = Instance.new("TextButton")
-    fixBtn.Size = UDim2.new(0.85,0,0,30)
-    fixBtn.Position = UDim2.new(0.075,0,0,140)
-    fixBtn.Text = "防止旋转: 关闭"
-    fixBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    fixBtn.TextColor3 = Color3.new(1,1,1)
-    fixBtn.Parent = content
-
-    -- 十字架方向按钮
-    local dirButtons = {
-        {name="上", dir="up", pos=UDim2.new(0.35,0,0,190)},
-        {name="下", dir="down", pos=UDim2.new(0.35,0,0,260)},
-        {name="左", dir="left", pos=UDim2.new(0.05,0,0,225)},
-        {name="右", dir="right", pos=UDim2.new(0.65,0,0,225)},
-        {name="前", dir="forward", pos=UDim2.new(0.2,0,0,225)},
-        {name="后", dir="back", pos=UDim2.new(0.5,0,0,225)},
+    -- 十字控制按钮布局
+    local dirs = {
+        {n="上",d="up",x=0.35,y=190},
+        {n="下",d="down",x=0.35,y=260},
+        {n="左",d="left",x=0.05,y=225},
+        {n="右",d="right",x=0.65,y=225},
+        {n="前",d="forward",x=0.2,y=225},
+        {n="后",d="back",x=0.5,y=225},
     }
 
-    for _,info in ipairs(dirButtons) do
-        local b = Instance.new("TextButton")
+    for _,v in ipairs(dirs) do
+        local b = Instance.new("TextButton", controlPanel)
         b.Size = UDim2.new(0.15,0,0,35)
-        b.Position = info.pos
-        b.Text = info.name
-        b.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+        b.Position = UDim2.new(v.x,0,0,v.y)
+        b.Text = v.n
+        b.BackgroundColor3 = Color3.fromRGB(0,150,255)
         b.TextColor3 = Color3.new(1,1,1)
-        b.Parent = content
         b.MouseButton1Click:Connect(function()
-            _G.moveDirectionType = info.dir
-
-            -- 点击前/后/左/右时立即刷新一次相机位置（记录 camera CFrame）
-            if info.dir == "forward" or info.dir == "back" or info.dir == "left" or info.dir == "right" then
-                local camera = workspace.CurrentCamera
-                if camera then
-                    manualCameraCFrame = camera.CFrame
-                    manualCameraUpdateTime = tick()
-                    -- 也更新 lastCameraDirection 以保持一致（备用）
-                    local look = camera.CFrame.LookVector
-                    lastCameraDirection = Vector3.new(look.X, 0, look.Z)
-                    if lastCameraDirection.Magnitude > 0 then
-                        lastCameraDirection = lastCameraDirection.Unit
-                    end
-                end
+            _G.moveDirectionType = v.d
+            local cam = workspace.CurrentCamera
+            if cam then
+                manualCameraCFrame = cam.CFrame
+                manualCameraTime = tick()
             end
-
             UpdateAllPartsVelocity()
         end)
     end
 
-    -- 主按钮逻辑修改：漂浮开启锁定相机方向，关闭恢复监听
+    -- 漂浮开关逻辑
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
         anActivity = not anActivity
         if anActivity then
-            local camera = workspace.CurrentCamera
-            if camera then
-                local look = camera.CFrame.LookVector
-                lockedDirection = Vector3.new(look.X, 0, look.Z)
-                if lockedDirection.Magnitude > 0 then lockedDirection = lockedDirection.Unit end
+            -- 锁定当前相机方向
+            local cam = workspace.CurrentCamera
+            if cam then
+                local look = cam.CFrame.LookVector
+                lockedDirection = Vector3.new(look.X,0,look.Z).Unit
             else
                 lockedDirection = Vector3.new(0,1,0)
             end
             stopCameraTracking()
             mainButton.Text = "漂浮: 开启"
-            mainButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            mainButton.BackgroundColor3 = Color3.fromRGB(0,255,0)
             ProcessAllParts()
         else
             lockedDirection = nil
             CleanupParts()
             startCameraTracking()
             mainButton.Text = "漂浮: 关闭"
-            mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            mainButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
             controlPanel.Visible = false
         end
     end)
-
-    stopBtn.MouseButton1Click:Connect(function()
-        StopAllParts()
-    end)
-
-    fixBtn.MouseButton1Click:Connect(function()
-        local on = ToggleRotationPrevention()
-        if on then
-            fixBtn.Text = "防止旋转: 开启"
-            fixBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        else
-            fixBtn.Text = "防止旋转: 关闭"
-            fixBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        end
-    end)
-
-    speedUp.MouseButton1Click:Connect(function()
-        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 0, 100)
-        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-        UpdateAllPartsVelocity()
-    end)
-
-    speedDown.MouseButton1Click:Connect(function()
-        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 0, 100)
-        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
-        UpdateAllPartsVelocity()
-    end)
 end
 
--- 初始化
+--=============== 初始化 ===============
 CreateMobileGUI()
 startCameraTracking()
-print("全局物体漂浮脚本已加载")
+print("✅ 全局物体漂浮脚本已加载")

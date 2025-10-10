@@ -70,7 +70,7 @@ local function isPartEligible(part)
     return true
 end
 
--- ================ 新增：只在点击时缓存相机方向 ================
+-- ================ 只在点击时缓存相机方向 ================
 local function CacheMoveDirection(dirType)
     local camera = workspace.CurrentCamera
     if not camera then
@@ -104,7 +104,7 @@ local function CacheMoveDirection(dirType)
     end
 end
 
--- ================ 修改：使用缓存方向（避免每帧读相机） ================
+-- ================ 使用缓存方向 ================
 local function CalculateMoveDirection()
     if isPlayerDead then return Vector3.new(0, 0, 0) end
     -- 优先使用缓存（由点击更新）；如果没有缓存则退回默认向上
@@ -123,6 +123,7 @@ local function CleanupParts()
     end
 end
 
+-- 改进姥爷防旋转逻辑
 local function UpdateAllPartsVelocity()
     if isPlayerDead then
         for _, data in pairs(_G.processedParts) do
@@ -137,8 +138,18 @@ local function UpdateAllPartsVelocity()
         if data.bodyVelocity and data.bodyVelocity.Parent then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
         end
-        if _G.fixedMode and data.bodyGyro and data.bodyGyro.Parent then
-            data.bodyGyro.CFrame = part.CFrame
+        if _G.fixedMode then
+            -- 防旋转plus版
+            pcall(function()
+                part.RotVelocity = Vector3.zero
+                part.AssemblyAngularVelocity = Vector3.zero
+            end)
+            if data.bodyGyro and data.bodyGyro.Parent then
+                data.bodyGyro.CFrame = part.CFrame
+                data.bodyGyro.P = 5000
+                data.bodyGyro.D = 500
+                data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            end
         end
     end
 end
@@ -427,7 +438,7 @@ local function CreateMobileGUI()
         end)
     end
 
-    -- 按钮功能（保留原版逻辑）
+    -- 按钮功能
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
         anActivity = not anActivity

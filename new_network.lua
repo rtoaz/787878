@@ -19,15 +19,19 @@ end
 -- 作者提示
 pcall(function()
     local authorMessage = Instance.new("Message")
-    authorMessage.Text = "全局物体漂浮脚本（NetworkOwner 分支） - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53帮忙优化，开启网络所有权别人应该能看到"
+    authorMessage.Text = "全局物体漂浮脚本（NetworkOwner 版本） - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53修改，开启网络所有权别人应该能看到"
     authorMessage.Parent = Workspace
-    task.delay(3, function() if authorMessage and authorMessage.Parent then authorMessage:Destroy() end end)
+    task.delay(3, function()
+        if authorMessage and authorMessage.Parent then
+            authorMessage:Destroy()
+        end
+    end)
 end)
 
 -- ================= 全局状态 =================
 _G.processedParts = _G.processedParts or {}
 _G.floatSpeed = _G.floatSpeed or 10
-_G.moveDirectionType = _G.moveDirectionType or "up"  -- 初始方向
+_G.moveDirectionType = _G.moveDirectionType or "up" -- 初始方向
 _G.fixedMode = _G.fixedMode or false
 _G.cachedMoveVector = _G.cachedMoveVector or Vector3.new(0, 1, 0) -- 缓存方向（点击时更新）
 _G.useNetworkOwnership = _G.useNetworkOwnership or false -- 新增：是否使用网络所有权
@@ -75,11 +79,9 @@ end
 -- ================ 只在点击时缓存相机方向 ================
 local function CacheMoveDirection(dirType)
     local camera = workspace.CurrentCamera
-    if not camera then
-        -- 如果没有相机，保留原缓存
+    if not camera then -- 如果没有相机，保留原缓存
         return
     end
-
     if dirType == "up" then
         _G.cachedMoveVector = Vector3.new(0, 1, 0)
         return
@@ -87,10 +89,8 @@ local function CacheMoveDirection(dirType)
         _G.cachedMoveVector = Vector3.new(0, -1, 0)
         return
     end
-
     local look = camera.CFrame.LookVector
     local right = camera.CFrame.RightVector
-
     if dirType == "forward" then
         local v = Vector3.new(look.X, 0, look.Z)
         _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
@@ -115,27 +115,26 @@ end
 
 local function ReleaseNetworkOwnershipForPart(part)
     if not part or not part:IsA("BasePart") then return end
-    -- 设为 nil 释放网络所有权；使用 pcall 避免在某些环境报错
     pcall(function()
-        if part.SetNetworkOwner then
-            part:SetNetworkOwner(nil)
-        end
+        if part.SetNetworkOwner then part:SetNetworkOwner(nil) end
     end)
 end
 
 local function AssignNetworkOwnershipToPart(part)
     if not part or not part:IsA("BasePart") then return end
     pcall(function()
-        if part.SetNetworkOwner then
-            part:SetNetworkOwner(LocalPlayer)
-        end
+        if part.SetNetworkOwner then part:SetNetworkOwner(LocalPlayer) end
     end)
 end
 
 local function CleanupParts()
     for part, data in pairs(_G.processedParts) do
-        pcall(function() if data.bodyVelocity then data.bodyVelocity:Destroy() end end)
-        pcall(function() if data.bodyGyro then data.bodyGyro:Destroy() end end)
+        pcall(function()
+            if data.bodyVelocity then data.bodyVelocity:Destroy() end
+        end)
+        pcall(function()
+            if data.bodyGyro then data.bodyGyro:Destroy() end
+        end)
         -- 释放网络所有权
         pcall(function() ReleaseNetworkOwnershipForPart(part) end)
     end
@@ -146,7 +145,7 @@ local function CleanupParts()
     end
 end
 
--- ✅ 修复防旋转逻辑
+-- 防旋转逻辑
 local function UpdateAllPartsVelocity()
     if isPlayerDead then
         for _, data in pairs(_G.processedParts) do
@@ -156,22 +155,28 @@ local function UpdateAllPartsVelocity()
         end
         return
     end
+
     local dir = CalculateMoveDirection()
     for part, data in pairs(_G.processedParts) do
         if data.bodyVelocity and data.bodyVelocity.Parent then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
         end
+
         if _G.fixedMode then
-            -- 完全锁死旋转
+            -- 强制把角速度清零（每帧）
             pcall(function()
-                part.RotVelocity = Vector3.zero
-                part.AssemblyAngularVelocity = Vector3.zero
+                part.RotVelocity = Vector3.new(0, 0, 0)
+                part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end)
+
+            -- 让已有的 BodyGyro 保持强力锁定（但不要把目标设为 part.CFrame）
             if data.bodyGyro and data.bodyGyro.Parent then
-                data.bodyGyro.CFrame = part.CFrame
-                data.bodyGyro.P = 5000
-                data.bodyGyro.D = 500
-                data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                pcall(function()
+                    -- 强化 PID 参数与扭矩，保持陀螺生效
+                    data.bodyGyro.P = 50000
+                    data.bodyGyro.D = 500
+                    data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                end)
             end
         end
     end
@@ -208,8 +213,15 @@ local function ProcessPart(part)
         bg = Instance.new("BodyGyro")
         bg.Parent = part
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.P = 1000
-        bg.D = 100
+        bg.P = 50000 -- 提高 P 值以增强锁定力
+        bg.D = 500
+        -- 关键：**只在创建时把目标方向设为当前朝向**，之后不要每帧覆盖
+        bg.CFrame = part.CFrame
+        -- optionally：清零角速度立刻减少抖动
+        pcall(function()
+            part.RotVelocity = Vector3.new(0, 0, 0)
+            part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end)
     end
 
     -- 如果开启网络所有权，则尝试把该部件的网络所有权分配给本地玩家
@@ -217,7 +229,10 @@ local function ProcessPart(part)
         pcall(function() AssignNetworkOwnershipToPart(part) end)
     end
 
-    _G.processedParts[part] = { bodyVelocity = bv, bodyGyro = bg }
+    _G.processedParts[part] = {
+        bodyVelocity = bv,
+        bodyGyro = bg,
+    }
 end
 
 local function ProcessAllParts()
@@ -226,7 +241,10 @@ local function ProcessAllParts()
         CleanupParts()
         return
     end
-    if updateConnection then updateConnection:Disconnect() end
+
+    if updateConnection then
+        updateConnection:Disconnect()
+    end
 
     -- 启动/批量处理前，先缓存一次当前方向（确保首次开启即以当时相机朝向为准）
     CacheMoveDirection(_G.moveDirectionType)
@@ -234,6 +252,7 @@ local function ProcessAllParts()
     for _, v in ipairs(Workspace:GetDescendants()) do
         pcall(function() ProcessPart(v) end)
     end
+
     updateConnection = RunService.Heartbeat:Connect(UpdateAllPartsVelocity)
 end
 
@@ -246,6 +265,7 @@ end
 -- 切换防旋转
 local function ToggleRotationPrevention()
     if _G.fixedMode then
+        -- 关闭：销毁所有 BodyGyro
         _G.fixedMode = false
         for _, data in pairs(_G.processedParts) do
             if data.bodyGyro then
@@ -255,15 +275,31 @@ local function ToggleRotationPrevention()
         end
         return false
     else
+        -- 开启：为已有 parts 创建 BodyGyro（并设置一次目标朝向）
         _G.fixedMode = true
         for part, data in pairs(_G.processedParts) do
             if not data.bodyGyro then
                 local bg = Instance.new("BodyGyro")
                 bg.Parent = part
                 bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                bg.P = 1000
-                bg.D = 100
+                bg.P = 50000
+                bg.D = 500
+                bg.CFrame = part.CFrame -- 关键：只设一次目标朝向
                 data.bodyGyro = bg
+
+                -- 立即清零角速度，帮助陀螺稳定
+                pcall(function()
+                    part.RotVelocity = Vector3.new(0, 0, 0)
+                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end)
+            else
+                -- 如果已有陀螺，确保其目标方向为当时朝向（只做一次）
+                pcall(function()
+                    data.bodyGyro.CFrame = part.CFrame
+                    data.bodyGyro.P = 50000
+                    data.bodyGyro.D = 500
+                    data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+                end)
             end
         end
         return true
@@ -294,9 +330,8 @@ local function onCharacterAdded(char)
         mainButton.Text = "漂浮: 关闭"
         mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     end
-    if controlPanel then
-        controlPanel.Visible = false
-    end
+    if controlPanel then controlPanel.Visible = false end
+
     local humanoid = char:WaitForChild("Humanoid")
     if humanoid then
         if humanoidDiedConnection then humanoidDiedConnection:Disconnect() end
@@ -309,13 +344,12 @@ local function onCharacterAdded(char)
                     mainButton.Text = "漂浮: 关闭"
                     mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
                 end
-                if controlPanel then
-                    controlPanel.Visible = false
-                end
+                if controlPanel then controlPanel.Visible = false end
             end
         end)
     end
 end
+
 Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if Players.LocalPlayer.Character then onCharacterAdded(Players.LocalPlayer.Character) end
 
@@ -337,7 +371,6 @@ local function makeDraggable(guiObject)
             dragStart = input.Position
             startPos = guiObject.Position
             dragInput = input
-
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -360,7 +393,7 @@ local function makeDraggable(guiObject)
     end)
 end
 
--- ================ GUI  ================
+-- ================ GUI ================
 local function CreateMobileGUI()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
     local screenGui = Instance.new("ScreenGui")
@@ -401,9 +434,7 @@ local function CreateMobileGUI()
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
 
-    panelToggle.MouseButton1Click:Connect(function()
-        controlPanel.Visible = not controlPanel.Visible
-    end)
+    panelToggle.MouseButton1Click:Connect(function() controlPanel.Visible = not controlPanel.Visible end)
 
     -- 内容
     local content = Instance.new("Frame")
@@ -488,7 +519,7 @@ local function CreateMobileGUI()
         -- 仅在点击时缓存当前相机方向
         b.MouseButton1Click:Connect(function()
             _G.moveDirectionType = info.dir
-            CacheMoveDirection(info.dir)   -- 这里是关键：单次缓存，不会每帧变化
+            CacheMoveDirection(info.dir) -- 这里是关键：单次缓存，不会每帧变化
             UpdateAllPartsVelocity()
         end)
     end
@@ -550,4 +581,4 @@ end
 
 -- 初始化 GUI
 CreateMobileGUI()
-print("全局物体漂浮脚本（NetworkOwner 分支）已加载😋")
+print("全局物体漂浮脚本（NetworkOwner 版本)已加载😋")

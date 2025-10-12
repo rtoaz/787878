@@ -19,7 +19,7 @@ end
 -- 作者提示
 pcall(function()
     local authorMessage = Instance.new("Message")
-    authorMessage.Text = "全局物体漂浮脚本（NetworkOwner 版本） - 作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53修改，开启网络所有权别人应该能看到"
+    authorMessage.Text = "全局物体漂浮脚本 - 原作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53修改，开启网络所有权别人应该能看到"
     authorMessage.Parent = Workspace
     task.delay(3, function()
         if authorMessage and authorMessage.Parent then
@@ -163,16 +163,12 @@ local function UpdateAllPartsVelocity()
         end
 
         if _G.fixedMode then
-            -- 强制把角速度清零（每帧）
             pcall(function()
                 part.RotVelocity = Vector3.new(0, 0, 0)
                 part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end)
-
-            -- 让已有的 BodyGyro 保持强力锁定（但不要把目标设为 part.CFrame）
             if data.bodyGyro and data.bodyGyro.Parent then
                 pcall(function()
-                    -- 强化 PID 参数与扭矩，保持陀螺生效
                     data.bodyGyro.P = 50000
                     data.bodyGyro.D = 500
                     data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
@@ -189,14 +185,12 @@ local function ProcessPart(part)
     local entry = _G.processedParts[part]
     if entry and entry.bodyVelocity and entry.bodyVelocity.Parent then
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
-        -- 如果启用了网络所有权，确保已经赋予
         if _G.useNetworkOwnership then
             pcall(function() AssignNetworkOwnershipToPart(part) end)
         end
         return
     end
 
-    -- 清除已有 BodyMover（避免冲突）
     for _, child in ipairs(part:GetChildren()) do
         if child:IsA("BodyMover") then
             pcall(function() child:Destroy() end)
@@ -213,18 +207,15 @@ local function ProcessPart(part)
         bg = Instance.new("BodyGyro")
         bg.Parent = part
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.P = 50000 -- 提高 P 值以增强锁定力
+        bg.P = 50000
         bg.D = 500
-        -- 关键：**只在创建时把目标方向设为当前朝向**，之后不要每帧覆盖
         bg.CFrame = part.CFrame
-        -- optionally：清零角速度立刻减少抖动
         pcall(function()
             part.RotVelocity = Vector3.new(0, 0, 0)
             part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         end)
     end
 
-    -- 如果开启网络所有权，则尝试把该部件的网络所有权分配给本地玩家
     if _G.useNetworkOwnership then
         pcall(function() AssignNetworkOwnershipToPart(part) end)
     end
@@ -246,7 +237,6 @@ local function ProcessAllParts()
         updateConnection:Disconnect()
     end
 
-    -- 启动/批量处理前，先缓存一次当前方向（确保首次开启即以当时相机朝向为准）
     CacheMoveDirection(_G.moveDirectionType)
 
     for _, v in ipairs(Workspace:GetDescendants()) do
@@ -256,16 +246,19 @@ local function ProcessAllParts()
     updateConnection = RunService.Heartbeat:Connect(UpdateAllPartsVelocity)
 end
 
+-- ✅ 修复：增加 speedLabel 更新
 local function StopAllParts()
     _G.floatSpeed = 0
     UpdateAllPartsVelocity()
     CleanupParts()
+    if speedLabel then
+        speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
+    end
 end
 
 -- 切换防旋转
 local function ToggleRotationPrevention()
     if _G.fixedMode then
-        -- 关闭：销毁所有 BodyGyro
         _G.fixedMode = false
         for _, data in pairs(_G.processedParts) do
             if data.bodyGyro then
@@ -275,7 +268,6 @@ local function ToggleRotationPrevention()
         end
         return false
     else
-        -- 开启：为已有 parts 创建 BodyGyro（并设置一次目标朝向）
         _G.fixedMode = true
         for part, data in pairs(_G.processedParts) do
             if not data.bodyGyro then
@@ -284,16 +276,13 @@ local function ToggleRotationPrevention()
                 bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
                 bg.P = 50000
                 bg.D = 500
-                bg.CFrame = part.CFrame -- 关键：只设一次目标朝向
+                bg.CFrame = part.CFrame
                 data.bodyGyro = bg
-
-                -- 立即清零角速度，帮助陀螺稳定
                 pcall(function()
                     part.RotVelocity = Vector3.new(0, 0, 0)
                     part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 end)
             else
-                -- 如果已有陀螺，确保其目标方向为当时朝向（只做一次）
                 pcall(function()
                     data.bodyGyro.CFrame = part.CFrame
                     data.bodyGyro.P = 50000
@@ -306,10 +295,8 @@ local function ToggleRotationPrevention()
     end
 end
 
--- 切换网络所有权（按钮调用）
 local function ToggleNetworkOwnership()
     _G.useNetworkOwnership = not _G.useNetworkOwnership
-    -- 如果开启则为现有 processed parts 赋权；如果关闭则释放
     for part, data in pairs(_G.processedParts) do
         if _G.useNetworkOwnership then
             pcall(function() AssignNetworkOwnershipToPart(part) end)
@@ -320,7 +307,6 @@ local function ToggleNetworkOwnership()
     return _G.useNetworkOwnership
 end
 
--- 死亡/重生处理
 local humanoidDiedConnection = nil
 local function onCharacterAdded(char)
     isPlayerDead = false
@@ -353,18 +339,16 @@ end
 Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if Players.LocalPlayer.Character then onCharacterAdded(Players.LocalPlayer.Character) end
 
--- ================ 可拖动辅助（支持鼠标与触控） ================
+-- ================ 可拖动辅助 ================
 local function makeDraggable(guiObject)
     local dragging = false
     local dragInput = nil
     local dragStart = nil
     local startPos = nil
-
     local function update(input)
         local delta = input.Position - dragStart
         guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -379,13 +363,11 @@ local function makeDraggable(guiObject)
             end)
         end
     end)
-
     guiObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
@@ -401,7 +383,6 @@ local function CreateMobileGUI()
     screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
 
-    -- 主开关按钮
     mainButton = Instance.new("TextButton")
     mainButton.Size = UDim2.new(0, 120, 0, 50)
     mainButton.Position = UDim2.new(1, -130, 0, 50)
@@ -409,11 +390,8 @@ local function CreateMobileGUI()
     mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     mainButton.TextColor3 = Color3.new(1,1,1)
     mainButton.Parent = screenGui
-
-    -- 使主按钮可拖动
     makeDraggable(mainButton)
 
-    -- 打开和关闭控制面板按钮
     local panelToggle = Instance.new("TextButton")
     panelToggle.Size = UDim2.new(0, 120, 0, 30)
     panelToggle.Position = UDim2.new(1, -130, 0, 120)
@@ -423,7 +401,6 @@ local function CreateMobileGUI()
     panelToggle.Parent = screenGui
     makeDraggable(panelToggle)
 
-    -- 控制面板
     controlPanel = Instance.new("Frame")
     controlPanel.Size = UDim2.new(0, 260, 0, 420)
     controlPanel.Position = UDim2.new(1, -400, 0, 10)
@@ -433,16 +410,13 @@ local function CreateMobileGUI()
     controlPanel.Draggable = true
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
-
     panelToggle.MouseButton1Click:Connect(function() controlPanel.Visible = not controlPanel.Visible end)
 
-    -- 内容
     local content = Instance.new("Frame")
     content.Size = UDim2.new(1,0,1,0)
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
 
-    -- 速度显示
     speedLabel = Instance.new("TextLabel")
     speedLabel.Size = UDim2.new(0.85,0,0,30)
     speedLabel.Position = UDim2.new(0.075,0,0,10)
@@ -452,7 +426,6 @@ local function CreateMobileGUI()
     speedLabel.TextScaled = true
     speedLabel.Parent = content
 
-    -- 加速按钮（+）
     local speedUp = Instance.new("TextButton")
     speedUp.Size = UDim2.new(0.4,0,0,30)
     speedUp.Position = UDim2.new(0.05,0,0,50)
@@ -461,7 +434,6 @@ local function CreateMobileGUI()
     speedUp.TextColor3 = Color3.new(1,1,1)
     speedUp.Parent = content
 
-    -- 减速按钮（-）
     local speedDown = Instance.new("TextButton")
     speedDown.Size = UDim2.new(0.4,0,0,30)
     speedDown.Position = UDim2.new(0.55,0,0,50)
@@ -470,7 +442,6 @@ local function CreateMobileGUI()
     speedDown.TextColor3 = Color3.new(1,1,1)
     speedDown.Parent = content
 
-    -- 停止移动按钮
     local stopBtn = Instance.new("TextButton")
     stopBtn.Size = UDim2.new(0.85,0,0,30)
     stopBtn.Position = UDim2.new(0.075,0,0,100)
@@ -479,7 +450,6 @@ local function CreateMobileGUI()
     stopBtn.TextColor3 = Color3.new(1,1,1)
     stopBtn.Parent = content
 
-    -- 防旋转按钮
     local fixBtn = Instance.new("TextButton")
     fixBtn.Size = UDim2.new(0.85,0,0,30)
     fixBtn.Position = UDim2.new(0.075,0,0,140)
@@ -488,7 +458,6 @@ local function CreateMobileGUI()
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
 
-    -- 网络所有权按钮
     networkBtn = Instance.new("TextButton")
     networkBtn.Size = UDim2.new(0.85,0,0,30)
     networkBtn.Position = UDim2.new(0.075,0,0,180)
@@ -497,7 +466,6 @@ local function CreateMobileGUI()
     networkBtn.TextColor3 = Color3.new(1,1,1)
     networkBtn.Parent = content
 
-    -- 十字架方向按钮
     local dirButtons = {
         {name="上", dir="up", pos=UDim2.new(0.35,0,0,230)},
         {name="下", dir="down", pos=UDim2.new(0.35,0,0,300)},
@@ -515,16 +483,13 @@ local function CreateMobileGUI()
         b.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
-
-        -- 仅在点击时缓存当前相机方向
         b.MouseButton1Click:Connect(function()
             _G.moveDirectionType = info.dir
-            CacheMoveDirection(info.dir) -- 这里是关键：单次缓存，不会每帧变化
+            CacheMoveDirection(info.dir)
             UpdateAllPartsVelocity()
         end)
     end
 
-    -- 按钮功能
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
         anActivity = not anActivity
@@ -579,6 +544,6 @@ local function CreateMobileGUI()
     end)
 end
 
--- 初始化 GUI
+-- 初始化
 CreateMobileGUI()
-print("全局物体漂浮脚本（NetworkOwner 版本)已加载😋")
+print("全局物体漂浮脚本已加载😋")

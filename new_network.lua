@@ -62,6 +62,7 @@ local function setupSimulationRadius()
         warn("模拟半径设置失败: " .. tostring(err))
     end
 end
+
 setupSimulationRadius()
 
 -- ================= 辅助函数 =================

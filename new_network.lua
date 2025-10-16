@@ -19,7 +19,7 @@ end
 -- 作者提示
 pcall(function()
     local authorMessage = Instance.new("Message")
-    authorMessage.Text = "全局物体漂浮脚本 - 原作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53修改，开启网络所有权别人应该能看到"
+    authorMessage.Text = "全局物体漂浮脚本 - 原作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53修改"
     authorMessage.Parent = Workspace
     task.delay(3, function()
         if authorMessage and authorMessage.Parent then
@@ -174,8 +174,8 @@ local function UpdateAllPartsVelocity()
             if data.bodyGyro and data.bodyGyro.Parent then
                 pcall(function()
                     -- 强化 PID 参数与扭矩，保持陀螺生效
-                    data.bodyGyro.P = 50000
-                    data.bodyGyro.D = 500
+                    data.bodyGyro.P = 1000
+                    data.bodyGyro.D = 100
                     data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
                 end)
             end
@@ -214,8 +214,8 @@ local function ProcessPart(part)
         bg = Instance.new("BodyGyro")
         bg.Parent = part
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.P = 50000 -- 提高 P 值以增强锁定力
-        bg.D = 500
+        bg.P = 1000 -- 提高 P 值以增强锁定力
+        bg.D = 100
         -- 关键：**只在创建时把目标方向设为当前朝向**，之后不要每帧覆盖
         bg.CFrame = part.CFrame
         -- optionally：清零角速度立刻减少抖动
@@ -286,8 +286,8 @@ local function ToggleRotationPrevention()
                 local bg = Instance.new("BodyGyro")
                 bg.Parent = part
                 bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                bg.P = 50000
-                bg.D = 500
+                bg.P = 1000
+                bg.D = 100
                 bg.CFrame = part.CFrame -- 关键：只设一次目标朝向
                 data.bodyGyro = bg
 
@@ -300,8 +300,8 @@ local function ToggleRotationPrevention()
                 -- 如果已有陀螺，确保其目标方向为当时朝向（只做一次）
                 pcall(function()
                     data.bodyGyro.CFrame = part.CFrame
-                    data.bodyGyro.P = 50000
-                    data.bodyGyro.D = 500
+                    data.bodyGyro.P = 1000
+                    data.bodyGyro.D = 100
                     data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
                 end)
             end

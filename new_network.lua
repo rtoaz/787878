@@ -258,7 +258,7 @@ local function ProcessAllParts()
     updateConnection = RunService.Heartbeat:Connect(UpdateAllPartsVelocity)
 end
 
--- ✅ 修复：停止移动但保持漂浮（悬停）
+-- 悬停
 local function StopAllParts()
     _G.floatSpeed = 0
     UpdateAllPartsVelocity()  -- 把速度设为 0，让所有漂浮物停止移动但仍保持漂浮
@@ -592,7 +592,7 @@ local function CreateMobileGUI()
     -- 默认 1.0，最小 0.5，最大 1.0，步进 0.1
     local uiScaleLabel = Instance.new("TextLabel")
     uiScaleLabel.Size = UDim2.new(0.85,0,0,30)
-    uiScaleLabel.Position = UDim2.new(0.075,0,0,320)
+    uiScaleLabel.Position = UDim2.new(0.075,0,0,340)
     uiScaleLabel.Text = "UI 缩放: " .. string.format("%.1f", uiScale.Scale)
     uiScaleLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
     uiScaleLabel.TextColor3 = Color3.new(1,1,1)
@@ -601,7 +601,7 @@ local function CreateMobileGUI()
 
     local uiScaleDown = Instance.new("TextButton")
     uiScaleDown.Size = UDim2.new(0.4,0,0,30)
-    uiScaleDown.Position = UDim2.new(0.05,0,0,360)
+    uiScaleDown.Position = UDim2.new(0.05,0,0,380)
     uiScaleDown.Text = "-"
     uiScaleDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
     uiScaleDown.TextColor3 = Color3.new(1,1,1)
@@ -609,7 +609,7 @@ local function CreateMobileGUI()
 
     local uiScaleUp = Instance.new("TextButton")
     uiScaleUp.Size = UDim2.new(0.4,0,0,30)
-    uiScaleUp.Position = UDim2.new(0.55,0,0,360)
+    uiScaleUp.Position = UDim2.new(0.55,0,0,380)
     uiScaleUp.Text = "+"
     uiScaleUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
     uiScaleUp.TextColor3 = Color3.new(1,1,1)

@@ -258,7 +258,7 @@ local function ProcessAllParts()
     updateConnection = RunService.Heartbeat:Connect(UpdateAllPartsVelocity)
 end
 
--- 悬停
+-- ✅ 修复：停止移动但保持漂浮（悬停）
 local function StopAllParts()
     _G.floatSpeed = 0
     UpdateAllPartsVelocity()  -- 把速度设为 0，让所有漂浮物停止移动但仍保持漂浮
@@ -447,9 +447,9 @@ local function CreateMobileGUI()
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
 
-    -- 使用 UIScale 来统一控制 UI 大小（仅作用于控制面板内部）
+    -- 使用 UIScale 来统一控制 UI 大小（现在作用于 controlPanel，背景与内部一起缩放）
     local uiScale = Instance.new("UIScale")
-    uiScale.Parent = content
+    uiScale.Parent = controlPanel
     uiScale.Scale = math.clamp(_G.UIScaleValue or 1.0, 0.5, 1.0)
 
     -- 速度显示
@@ -615,7 +615,7 @@ local function CreateMobileGUI()
     uiScaleUp.TextColor3 = Color3.new(1,1,1)
     uiScaleUp.Parent = content
 
-    -- 绑定按钮事件
+    -- 绑定按钮事件：改变 controlPanel 上的 UIScale（背景 + 内部一起缩放）
     uiScaleUp.MouseButton1Click:Connect(function()
         _G.UIScaleValue = math.clamp((_G.UIScaleValue or 1.0) + 0.1, 0.5, 1.0)
         uiScale.Scale = _G.UIScaleValue

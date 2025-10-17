@@ -34,7 +34,10 @@ _G.floatSpeed = _G.floatSpeed or 10
 _G.moveDirectionType = _G.moveDirectionType or "up" -- 初始方向
 _G.fixedMode = _G.fixedMode or false
 _G.cachedMoveVector = _G.cachedMoveVector or Vector3.new(0, 1, 0) -- 缓存方向（点击时更新）
-_G.useNetworkOwnership = _G.useNetworkOwnership or false -- 新增：是否使用网络所有权
+_G.useNetworkOwnership = _G.useNetworkOwnership or false -- 是否使用网络所有权
+
+-- 新增：UI 缩放（默认 1.0，最小 0.1）
+_G.uiScale = _G.uiScale or 1.0
 
 local isPlayerDead = false
 local anActivity = false
@@ -45,6 +48,9 @@ local mainButton
 local controlPanel
 local speedLabel
 local networkBtn
+
+-- 存储基础 UDim2（用于按 uiScale 缩放）
+local baseUDim2 = {}
 
 -- 设置模拟半径
 local function setupSimulationRadius()
@@ -94,13 +100,13 @@ local function CacheMoveDirection(dirType)
     local right = camera.CFrame.RightVector
     if dirType == "forward" then
         local v = Vector3.new(look.X, 0, look.Z)
-        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
+        _G.cachedMoveVector = (v.Magnitude > 0) 和 v.Unit or Vector3.new(0, 0, 0)
     elseif dirType == "back" then
         local v = -Vector3.new(look.X, 0, look.Z)
         _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
-    elseif dirType == "right" then
+    elseif dirType == "right" 键，然后
         local v = Vector3.new(right.X, 0, right.Z)
-        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
+        _G.cachedMoveVector = (v.Magnitude > 0) 和 v.Unit or Vector3.new(0, 0, 0)
     elseif dirType == "left" then
         local v = -Vector3.new(right.X, 0, right.Z)
         _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
@@ -109,7 +115,7 @@ end
 
 -- ================ 使用缓存方向 ================
 local function CalculateMoveDirection()
-    if isPlayerDead then return Vector3.new(0, 0, 0) end
+    if isPlayerDead 键，然后 return Vector3.new(0, 0, 0) end
     -- 优先使用缓存（由点击更新）；如果没有缓存则退回默认向上
     return _G.cachedMoveVector or Vector3.new(0, 1, 0)
 end
@@ -148,7 +154,7 @@ end
 
 -- 防旋转逻辑
 local function UpdateAllPartsVelocity()
-    if isPlayerDead then
+    if isPlayerDead 键，然后
         for _, data in pairs(_G.processedParts) do
             if data.bodyVelocity and data.bodyVelocity.Parent then
                 data.bodyVelocity.Velocity = Vector3.new(0, 0, 0)
@@ -158,20 +164,20 @@ local function UpdateAllPartsVelocity()
     end
 
     local dir = CalculateMoveDirection()
-    for part, data in pairs(_G.processedParts) do
-        if data.bodyVelocity and data.bodyVelocity.Parent then
+    for part, data 在 pairs(_G.processedParts) do
+        if data.bodyVelocity 和 data.bodyVelocity.Parent 键，然后
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
         end
 
-        if _G.fixedMode then
+        if _G.fixedMode 键，然后
             -- 强制把角速度清零（每帧）
             pcall(function()
-                part.RotVelocity = Vector3.new(0, 0, 0)
+                part.RotVelocity = Vector3.new(0， 0, 0)
                 part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end)
 
             -- 让已有的 BodyGyro 保持强力锁定（但不要把目标设为 part.CFrame）
-            if data.bodyGyro and data.bodyGyro.Parent then
+            if data.bodyGyro 和 data.bodyGyro.Parent 键，然后
                 pcall(function()
                     -- 强化 PID 参数与扭矩，保持陀螺生效
                     data.bodyGyro.P = 1000
@@ -191,7 +197,7 @@ local function ProcessPart(part)
     if entry and entry.bodyVelocity and entry.bodyVelocity.Parent then
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
         -- 如果启用了网络所有权，确保已经赋予
-        if _G.useNetworkOwnership then
+        if _G.useNetworkOwnership 键，然后
             pcall(function() AssignNetworkOwnershipToPart(part) end)
         end
         return
@@ -199,7 +205,7 @@ local function ProcessPart(part)
 
     -- 清除已有 BodyMover（避免冲突）
     for _, child in ipairs(part:GetChildren()) do
-        if child:IsA("BodyMover") then
+        if child:IsA("BodyMover") 键，然后
             pcall(function() child:Destroy() end)
         end
     end
@@ -220,13 +226,13 @@ local function ProcessPart(part)
         bg.CFrame = part.CFrame
         -- optionally：清零角速度立刻减少抖动
         pcall(function()
-            part.RotVelocity = Vector3.new(0, 0, 0)
+            part.RotVelocity = Vector3.new(0， 0， 0)
             part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         end)
     end
 
     -- 如果开启网络所有权，则尝试把该部件的网络所有权分配给本地玩家
-    if _G.useNetworkOwnership then
+    if _G.useNetworkOwnership 键，然后
         pcall(function() AssignNetworkOwnershipToPart(part) end)
     end
 
@@ -250,14 +256,14 @@ local function ProcessAllParts()
     -- 启动/批量处理前，先缓存一次当前方向（确保首次开启即以当时相机朝向为准）
     CacheMoveDirection(_G.moveDirectionType)
 
-    for _, v in ipairs(Workspace:GetDescendants()) do
+    for _, v 在 ipairs(Workspace:GetDescendants()) do
         pcall(function() ProcessPart(v) end)
     end
 
     updateConnection = RunService.Heartbeat:Connect(UpdateAllPartsVelocity)
 end
 
--- ✅ 修复：停止移动但保持漂浮（悬停）
+-- 停止移动但保持漂浮（悬停）
 local function StopAllParts()
     _G.floatSpeed = 0
     UpdateAllPartsVelocity()  -- 把速度设为 0，让所有漂浮物停止移动但仍保持漂浮
@@ -268,10 +274,10 @@ end
 
 -- 切换防旋转
 local function ToggleRotationPrevention()
-    if _G.fixedMode then
+    if _G.fixedMode 键，然后
         -- 关闭：销毁所有 BodyGyro
         _G.fixedMode = false
-        for _, data in pairs(_G.processedParts) do
+        for _, data 在 pairs(_G.processedParts) do
             if data.bodyGyro then
                 pcall(function() data.bodyGyro:Destroy() end)
                 data.bodyGyro = nil
@@ -282,7 +288,7 @@ local function ToggleRotationPrevention()
         -- 开启：为已有 parts 创建 BodyGyro（并设置一次目标朝向）
         _G.fixedMode = true
         for part, data in pairs(_G.processedParts) do
-            if not data.bodyGyro then
+            if not data.bodyGyro 键，然后
                 local bg = Instance.new("BodyGyro")
                 bg.Parent = part
                 bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
@@ -315,7 +321,7 @@ local function ToggleNetworkOwnership()
     _G.useNetworkOwnership = not _G.useNetworkOwnership
     -- 如果开启则为现有 processed parts 赋权；如果关闭则释放
     for part, data in pairs(_G.processedParts) do
-        if _G.useNetworkOwnership then
+        if _G.useNetworkOwnership 键，然后
             pcall(function() AssignNetworkOwnershipToPart(part) end)
         else
             pcall(function() ReleaseNetworkOwnershipForPart(part) end)
@@ -330,7 +336,7 @@ local function onCharacterAdded(char)
     isPlayerDead = false
     anActivity = false
     CleanupParts()
-    if mainButton then
+    if mainButton 键，然后
         mainButton.Text = "漂浮: 关闭"
         mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     end
@@ -346,7 +352,7 @@ local function onCharacterAdded(char)
                 CleanupParts()
                 if mainButton then
                     mainButton.Text = "漂浮: 关闭"
-                    mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                    mainButton.BackgroundColor3 = Color3.fromRGB(255， 0， 0)
                 end
                 if controlPanel then controlPanel.Visible = false end
             end
@@ -397,9 +403,28 @@ local function makeDraggable(guiObject)
     end)
 end
 
+-- ================ UI 缩放辅助函数 ================
+local function ScaleUDim2(ud, scale)
+    -- 保持 Scale 部分不变，只按 scale 缩放 Offset（像素）部分
+    return UDim2.new(ud.X.Scale, math.floor(ud.X.Offset * scale), ud.Y.Scale, math.floor(ud.Y.Offset * scale))
+end
+
+local function ApplyUIScale(scale)
+    for element, props in pairs(baseUDim2) do
+        pcall(function()
+            if props.size then element.Size = ScaleUDim2(props.size, scale) end
+            if props.pos then element.Position = ScaleUDim2(props.pos, scale) end
+        end)
+    end
+end
+
 -- ================ GUI ================
 local function CreateMobileGUI()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    -- 清理已有（避免重复 UI）
+    local existing = playerGui:FindFirstChild("MobileFloatingControl")
+    if existing then existing:Destroy() end
+
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "MobileFloatingControl"
     screenGui.Parent = playerGui
@@ -407,36 +432,43 @@ local function CreateMobileGUI()
 
     -- 主开关按钮
     mainButton = Instance.new("TextButton")
-    mainButton.Size = UDim2.new(0, 120, 0, 50)
-    mainButton.Position = UDim2.new(1, -130, 0, 50)
     mainButton.Text = "漂浮: 关闭"
     mainButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     mainButton.TextColor3 = Color3.new(1,1,1)
     mainButton.Parent = screenGui
+    -- 记录基础尺寸/位置
+    baseUDim2[mainButton] = {
+        size = UDim2.new(0, 120, 0, 50),
+        pos  = UDim2.new(1, -130, 0, 50),
+    }
 
     -- 使主按钮可拖动
     makeDraggable(mainButton)
 
     -- 打开和关闭控制面板按钮
     local panelToggle = Instance.new("TextButton")
-    panelToggle.Size = UDim2.new(0, 120, 0, 30)
-    panelToggle.Position = UDim2.new(1, -130, 0, 120)
     panelToggle.Text = "控制面板"
     panelToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
     panelToggle.TextColor3 = Color3.new(1,1,1)
     panelToggle.Parent = screenGui
+    baseUDim2[panelToggle] = {
+        size = UDim2.new(0, 120, 0, 30),
+        pos  = UDim2.new(1, -130, 0, 120),
+    }
     makeDraggable(panelToggle)
 
     -- 控制面板
     controlPanel = Instance.new("Frame")
-    controlPanel.Size = UDim2.new(0, 260, 0, 420)
-    controlPanel.Position = UDim2.new(1, -400, 0, 10)
     controlPanel.BackgroundColor3 = Color3.fromRGB(60,60,60)
     controlPanel.BackgroundTransparency = 0.3
     controlPanel.Active = true
     controlPanel.Draggable = true
     controlPanel.Visible = false
     controlPanel.Parent = screenGui
+    baseUDim2[controlPanel] = {
+        size = UDim2.new(0, 260, 0, 420),
+        pos  = UDim2.new(1, -400, 0, 10),
+    }
 
     panelToggle.MouseButton1Click:Connect(function() controlPanel.Visible = not controlPanel.Visible end)
 
@@ -448,58 +480,103 @@ local function CreateMobileGUI()
 
     -- 速度显示
     speedLabel = Instance.new("TextLabel")
-    speedLabel.Size = UDim2.new(0.85,0,0,30)
-    speedLabel.Position = UDim2.new(0.075,0,0,10)
     speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
     speedLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
     speedLabel.TextColor3 = Color3.new(1,1,1)
     speedLabel.TextScaled = true
     speedLabel.Parent = content
+    baseUDim2[speedLabel] = {
+        size = UDim2.new(0.85,0,0,30),
+        pos  = UDim2.new(0.075,0,0,10),
+    }
 
     -- 加速按钮（+）
     local speedUp = Instance.new("TextButton")
-    speedUp.Size = UDim2.new(0.4,0,0,30)
-    speedUp.Position = UDim2.new(0.05,0,0,50)
     speedUp.Text = "+"
     speedUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
     speedUp.TextColor3 = Color3.new(1,1,1)
     speedUp.Parent = content
+    baseUDim2[speedUp] = {
+        size = UDim2.new(0.4,0,0,30),
+        pos  = UDim2.new(0.05,0,0,50),
+    }
 
     -- 减速按钮（-）
     local speedDown = Instance.new("TextButton")
-    speedDown.Size = UDim2.new(0.4,0,0,30)
-    speedDown.Position = UDim2.new(0.55,0,0,50)
     speedDown.Text = "-"
     speedDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
     speedDown.TextColor3 = Color3.new(1,1,1)
     speedDown.Parent = content
+    baseUDim2[speedDown] = {
+        size = UDim2.new(0.4,0,0,30),
+        pos  = UDim2.new(0.55,0,0,50),
+    }
+
+    -- ===== 新增：UI 大小显示与控制（右上角，默认 1.0，最小 0.1） =====
+    local uiSizeLabel = Instance.new("TextLabel")
+    uiSizeLabel.Text = "UI: " .. string.format("%.1f", _G.uiScale)
+    uiSizeLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    uiSizeLabel.TextColor3 = Color3.new(1,1,1)
+    uiSizeLabel.TextScaled = true
+    uiSizeLabel.Parent = content
+    baseUDim2[uiSizeLabel] = {
+        size = UDim2.new(0.25,0,0,30),
+        pos  = UDim2.new(0.7,0,0,10),
+    }
+
+    local uiSizeUp = Instance.new("TextButton")
+    uiSizeUp.Text = "+"
+    uiSizeUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    uiSizeUp.TextColor3 = Color3.new(1,1,1)
+    uiSizeUp.Parent = content
+    baseUDim2[uiSizeUp] = {
+        size = UDim2.new(0.09,0,0,30),
+        pos  = UDim2.new(0.58,0,0,50),
+    }
+
+    local uiSizeDown = Instance.new("TextButton")
+    uiSizeDown.Text = "-"
+    uiSizeDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    uiSizeDown.TextColor3 = Color3.new(1,1,1)
+    uiSizeDown.Parent = content
+    baseUDim2[uiSizeDown] = {
+        size = UDim2.new(0.09,0,0,30),
+        pos  = UDim2.new(0.78,0,0,50),
+    }
+    -- ============================================================
 
     -- 停止移动按钮
     local stopBtn = Instance.new("TextButton")
-    stopBtn.Size = UDim2.new(0.85,0,0,30)
-    stopBtn.Position = UDim2.new(0.075,0,0,100)
     stopBtn.Text = "停止移动"
     stopBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     stopBtn.TextColor3 = Color3.new(1,1,1)
     stopBtn.Parent = content
+    baseUDim2[stopBtn] = {
+        size = UDim2.new(0.85,0,0,30),
+        pos  = UDim2.new(0.075,0,0,100),
+    }
 
     -- 防旋转按钮
     local fixBtn = Instance.new("TextButton")
-    fixBtn.Size = UDim2.new(0.85,0,0,30)
-    fixBtn.Position = UDim2.new(0.075,0,0,140)
     fixBtn.Text = "防止旋转: 关闭"
     fixBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     fixBtn.TextColor3 = Color3.new(1,1,1)
     fixBtn.Parent = content
+    baseUDim2[fixBtn] = {
+        size = UDim2.new(0.85,0,0,30),
+        pos  = UDim2.new(0.075,0,0,140),
+    }
 
     -- 网络所有权按钮
     networkBtn = Instance.new("TextButton")
-    networkBtn.Size = UDim2.new(0.85,0,0,30)
-    networkBtn.Position = UDim2.new(0.075,0,0,180)
     networkBtn.Text = "网络所有权: 关闭"
     networkBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     networkBtn.TextColor3 = Color3.new(1,1,1)
     networkBtn.Parent = content
+    baseUDim2[networkBtn] = {
+        size = UDim2.new(0.85,0,0,30),
+        pos  = UDim2.new(0.075,0,0,180),
+    }
 
     -- 十字架方向按钮
     local dirButtons = {
@@ -513,12 +590,14 @@ local function CreateMobileGUI()
 
     for _, info in ipairs(dirButtons) do
         local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0.15,0,0,35)
-        b.Position = info.pos
         b.Text = info.name
         b.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
         b.TextColor3 = Color3.new(1,1,1)
         b.Parent = content
+        baseUDim2[b] = {
+            size = UDim2.new(0.15,0,0,35),
+            pos  = info.pos,
+        }
 
         -- 仅在点击时缓存当前相机方向
         b.MouseButton1Click:Connect(function()
@@ -581,6 +660,24 @@ local function CreateMobileGUI()
         speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
         UpdateAllPartsVelocity()
     end)
+
+    -- ===== UI 缩放按钮事件 =====
+    uiSizeUp.MouseButton1Click:Connect(function()
+        -- 增量 0.1，最大允许 5（可改）。最小为 0.1
+        _G.uiScale = math.clamp((_G.uiScale + 0.1), 0.1, 5)
+        uiSizeLabel.Text = "UI: " .. string.format("%.1f", _G.uiScale)
+        ApplyUIScale(_G.uiScale)
+    end)
+
+    uiSizeDown.MouseButton1Click:Connect(function()
+        _G.uiScale = math.clamp((_G.uiScale - 0.1), 0.1, 5)
+        uiSizeLabel.Text = "UI: " .. string.format("%.1f", _G.uiScale)
+        ApplyUIScale(_G.uiScale)
+    end)
+    -- ==========================
+
+    -- 在创建后应用当前缩放（默认 1.0）
+    ApplyUIScale(_G.uiScale)
 end
 
 -- 初始化

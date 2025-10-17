@@ -35,6 +35,7 @@ _G.moveDirectionType = _G.moveDirectionType or "up" -- 初始方向
 _G.fixedMode = _G.fixedMode or false
 _G.cachedMoveVector = _G.cachedMoveVector or Vector3.new(0, 1, 0) -- 缓存方向（点击时更新）
 _G.useNetworkOwnership = _G.useNetworkOwnership or false -- 新增：是否使用网络所有权
+_G.UIScaleValue = _G.UIScaleValue or 1.0 -- 全局 UI 缩放（默认 1.0, 最小 0.5, 最大 1.0）
 
 local isPlayerDead = false
 local anActivity = false
@@ -405,12 +406,6 @@ local function CreateMobileGUI()
     screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
 
-    -- 新增：统一 UI 缩放（默认 1.0，最小 0.1，最大 1.0）
-    _G.uiScale = _G.uiScale or 1.0
-    local uiScaleObj = Instance.new("UIScale")
-    uiScaleObj.Scale = math.clamp(_G.uiScale, 0.1, 1.0)
-    uiScaleObj.Parent = screenGui
-
     -- 主开关按钮
     mainButton = Instance.new("TextButton")
     mainButton.Size = UDim2.new(0, 120, 0, 50)
@@ -451,6 +446,11 @@ local function CreateMobileGUI()
     content.Size = UDim2.new(1,0,1,0)
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
+
+    -- 使用 UIScale 来统一控制 UI 大小（仅作用于控制面板内部）
+    local uiScale = Instance.new("UIScale")
+    uiScale.Parent = content
+    uiScale.Scale = math.clamp(_G.UIScaleValue or 1.0, 0.5, 1.0)
 
     -- 速度显示
     speedLabel = Instance.new("TextLabel")
@@ -534,50 +534,6 @@ local function CreateMobileGUI()
         end)
     end
 
-    -- ===== 新增：UI 大小控制（放在控制面板最下面） =====
-    local uiScaleLabel = Instance.new("TextLabel")
-    uiScaleLabel.Size = UDim2.new(0.85,0,0,30)
-    -- 放在控制面板接近底部的位置（不改动原有注释）
-    uiScaleLabel.Position = UDim2.new(0.075,0,0,320)
-    uiScaleLabel.Text = "UI 大小: " .. string.format("%.1f", uiScaleObj.Scale)
-    uiScaleLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
-    uiScaleLabel.TextColor3 = Color3.new(1,1,1)
-    uiScaleLabel.TextScaled = true
-    uiScaleLabel.Parent = content
-
-    local uiScaleDown = Instance.new("TextButton")
-    uiScaleDown.Size = UDim2.new(0.4,0,0,30)
-    uiScaleDown.Position = UDim2.new(0.05,0,0,360)
-    uiScaleDown.Text = "-"
-    uiScaleDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    uiScaleDown.TextColor3 = Color3.new(1,1,1)
-    uiScaleDown.Parent = content
-
-    local uiScaleUp = Instance.new("TextButton")
-    uiScaleUp.Size = UDim2.new(0.4,0,0,30)
-    uiScaleUp.Position = UDim2.new(0.55,0,0,360)
-    uiScaleUp.Text = "+"
-    uiScaleUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    uiScaleUp.TextColor3 = Color3.new(1,1,1)
-    uiScaleUp.Parent = content
-
-    -- 设置 UI 缩放函数（限制在 0.1 到 1.0）
-    local function setUIScale(val)
-        val = math.clamp(tonumber(val) or 0, 0.1, 1.0)
-        uiScaleObj.Scale = val
-        _G.uiScale = val
-        uiScaleLabel.Text = "UI 大小: " .. string.format("%.1f", val)
-    end
-
-    uiScaleDown.MouseButton1Click:Connect(function()
-        setUIScale((_G.uiScale or 1.0) - 0.1)
-    end)
-
-    uiScaleUp.MouseButton1Click:Connect(function()
-        setUIScale((_G.uiScale or 1.0) + 0.1)
-    end)
-    -- ===== 新增结束 =====
-
     -- 按钮功能
     mainButton.MouseButton1Click:Connect(function()
         if isPlayerDead then return end
@@ -630,6 +586,46 @@ local function CreateMobileGUI()
         _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 0, 100)
         speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
         UpdateAllPartsVelocity()
+    end)
+
+    -- ================= UI大小控制 =================
+    -- 默认 1.0，最小 0.5，最大 1.0，步进 0.1
+    local uiScaleLabel = Instance.new("TextLabel")
+    uiScaleLabel.Size = UDim2.new(0.85,0,0,30)
+    uiScaleLabel.Position = UDim2.new(0.075,0,0,320)
+    uiScaleLabel.Text = "UI 缩放: " .. string.format("%.1f", uiScale.Scale)
+    uiScaleLabel.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    uiScaleLabel.TextColor3 = Color3.new(1,1,1)
+    uiScaleLabel.TextScaled = true
+    uiScaleLabel.Parent = content
+
+    local uiScaleDown = Instance.new("TextButton")
+    uiScaleDown.Size = UDim2.new(0.4,0,0,30)
+    uiScaleDown.Position = UDim2.new(0.05,0,0,360)
+    uiScaleDown.Text = "-"
+    uiScaleDown.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    uiScaleDown.TextColor3 = Color3.new(1,1,1)
+    uiScaleDown.Parent = content
+
+    local uiScaleUp = Instance.new("TextButton")
+    uiScaleUp.Size = UDim2.new(0.4,0,0,30)
+    uiScaleUp.Position = UDim2.new(0.55,0,0,360)
+    uiScaleUp.Text = "+"
+    uiScaleUp.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    uiScaleUp.TextColor3 = Color3.new(1,1,1)
+    uiScaleUp.Parent = content
+
+    -- 绑定按钮事件
+    uiScaleUp.MouseButton1Click:Connect(function()
+        _G.UIScaleValue = math.clamp((_G.UIScaleValue or 1.0) + 0.1, 0.5, 1.0)
+        uiScale.Scale = _G.UIScaleValue
+        uiScaleLabel.Text = "UI 缩放: " .. string.format("%.1f", uiScale.Scale)
+    end)
+
+    uiScaleDown.MouseButton1Click:Connect(function()
+        _G.UIScaleValue = math.clamp((_G.UIScaleValue or 1.0) - 0.1, 0.5, 1.0)
+        uiScale.Scale = _G.UIScaleValue
+        uiScaleLabel.Text = "UI 缩放: " .. string.format("%.1f", uiScale.Scale)
     end)
 end
 

@@ -95,10 +95,10 @@ local function CacheMoveDirection(dirType)
     local right = camera.CFrame.RightVector
     if dirType == "forward" then
         local v = Vector3.new(look.X, 0, look.Z)
-        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
+        _G.cachedMoveVector = (v.Magnitude > 0) 和 v.Unit or Vector3.new(0, 0, 0)
     elseif dirType == "back" then
         local v = -Vector3.new(look.X, 0, look.Z)
-        _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
+        _G.cachedMoveVector = (v.Magnitude > 0) 和 v.Unit 或 Vector3.new(0, 0, 0)
     elseif dirType == "right" then
         local v = Vector3.new(right.X, 0, right.Z)
         _G.cachedMoveVector = (v.Magnitude > 0) and v.Unit or Vector3.new(0, 0, 0)
@@ -110,13 +110,13 @@ end
 
 -- ================ 使用缓存方向 ================
 local function CalculateMoveDirection()
-    if isPlayerDead then return Vector3.new(0, 0, 0) end
+    if isPlayerDead 键，然后 return Vector3.new(0, 0, 0) end
     -- 优先使用缓存（由点击更新）；如果没有缓存则退回默认向上
     return _G.cachedMoveVector or Vector3.new(0, 1, 0)
 end
 
 local function ReleaseNetworkOwnershipForPart(part)
-    if not part or not part:IsA("BasePart") then return end
+    if not part 或 not part:IsA("BasePart") then return end
     pcall(function()
         if part.SetNetworkOwner then part:SetNetworkOwner(nil) end
     end)
@@ -130,7 +130,7 @@ local function AssignNetworkOwnershipToPart(part)
 end
 
 local function CleanupParts()
-    for part, data in pairs(_G.processedParts) do
+    for part, data 在 pairs(_G.processedParts) do
         pcall(function()
             if data.bodyVelocity then data.bodyVelocity:Destroy() end
         end)
@@ -160,7 +160,7 @@ local function UpdateAllPartsVelocity()
 
     local dir = CalculateMoveDirection()
     for part, data in pairs(_G.processedParts) do
-        if data.bodyVelocity and data.bodyVelocity.Parent then
+        if data.bodyVelocity 和 data.bodyVelocity.Parent then
             data.bodyVelocity.Velocity = dir * _G.floatSpeed
         end
 
@@ -168,7 +168,7 @@ local function UpdateAllPartsVelocity()
             -- 强制把角速度清零（每帧）
             pcall(function()
                 part.RotVelocity = Vector3.new(0, 0, 0)
-                part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                part.AssemblyAngularVelocity = Vector3.new(0， 0, 0)
             end)
 
             -- 让已有的 BodyGyro 保持强力锁定（但不要把目标设为 part.CFrame）

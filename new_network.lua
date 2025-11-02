@@ -19,7 +19,7 @@ end
 -- 作者提示
 pcall(function()
     local authorMessage = Instance.new("Message")
-    authorMessage.Text = "全局物体漂浮脚本 - 原作者: XTTT\n此脚本为免费脚本，禁止贩卖\n由Star_Skater53修改"
+    authorMessage.Text = "全局物体漂浮脚本 - 原作者: XTTT\n此脚本为免费脚本,禁止贩卖\n由Star_Skater53修改"
     authorMessage.Parent = Workspace
     task.delay(3, function()
         if authorMessage and authorMessage.Parent then
@@ -81,7 +81,7 @@ end
 -- ================ 只在点击时缓存相机方向 ================
 local function CacheMoveDirection(dirType)
     local camera = workspace.CurrentCamera
-    if not camera then -- 如果没有相机，保留原缓存
+    if not camera then -- 如果没有相机,保留原缓存
         return
     end
     if dirType == "up" then
@@ -174,7 +174,7 @@ local function UpdateAllPartsVelocity()
             -- 让已有的 BodyGyro 保持强力锁定（但不要把目标设为 part.CFrame）
             if data.bodyGyro and data.bodyGyro.Parent then
                 pcall(function()
-                    -- 强化 PID 参数与扭矩，保持陀螺生效
+                    -- 强化 PID 参数与扭矩,保持陀螺生效
                     data.bodyGyro.P = 1000
                     data.bodyGyro.D = 100
                     data.bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
@@ -191,7 +191,7 @@ local function ProcessPart(part)
     local entry = _G.processedParts[part]
     if entry and entry.bodyVelocity and entry.bodyVelocity.Parent then
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
-        -- 如果启用了网络所有权，确保已经赋予
+        -- 如果启用了网络所有权,确保已经赋予
         if _G.useNetworkOwnership then
             pcall(function() AssignNetworkOwnershipToPart(part) end)
         end
@@ -217,7 +217,7 @@ local function ProcessPart(part)
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
         bg.P = 1000 -- 提高 P 值以增强锁定力
         bg.D = 100
-        -- 关键：**只在创建时把目标方向设为当前朝向**，之后不要每帧覆盖
+        -- 关键：**只在创建时把目标方向设为当前朝向**,之后不要每帧覆盖
         bg.CFrame = part.CFrame
         -- optionally：清零角速度立刻减少抖动
         pcall(function()
@@ -226,7 +226,7 @@ local function ProcessPart(part)
         end)
     end
 
-    -- 如果开启网络所有权，则尝试把该部件的网络所有权分配给本地玩家
+    -- 如果开启网络所有权,则尝试把该部件的网络所有权分配给本地玩家
     if _G.useNetworkOwnership then
         pcall(function() AssignNetworkOwnershipToPart(part) end)
     end
@@ -248,7 +248,7 @@ local function ProcessAllParts()
         updateConnection:Disconnect()
     end
 
-    -- 启动/批量处理前，先缓存一次当前方向（确保首次开启即以当时相机朝向为准）
+    -- 启动/批量处理前,先缓存一次当前方向（确保首次开启即以当时相机朝向为准）
     CacheMoveDirection(_G.moveDirectionType)
 
     for _, v in ipairs(Workspace:GetDescendants()) do
@@ -261,7 +261,7 @@ end
 -- 悬停
 local function StopAllParts()
     _G.floatSpeed = 0
-    UpdateAllPartsVelocity()  -- 把速度设为 0，让所有漂浮物停止移动但仍保持漂浮
+    UpdateAllPartsVelocity()  -- 把速度设为 0,让所有漂浮物停止移动但仍保持漂浮
     if speedLabel then
         speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
     end
@@ -292,13 +292,13 @@ local function ToggleRotationPrevention()
                 bg.CFrame = part.CFrame -- 关键：只设一次目标朝向
                 data.bodyGyro = bg
 
-                -- 立即清零角速度，帮助陀螺稳定
+                -- 立即清零角速度,帮助陀螺稳定
                 pcall(function()
                     part.RotVelocity = Vector3.new(0, 0, 0)
                     part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 end)
             else
-                -- 如果已有陀螺，确保其目标方向为当时朝向（只做一次）
+                -- 如果已有陀螺,确保其目标方向为当时朝向（只做一次）
                 pcall(function()
                     data.bodyGyro.CFrame = part.CFrame
                     data.bodyGyro.P = 1000
@@ -447,7 +447,7 @@ local function CreateMobileGUI()
     content.BackgroundTransparency = 1
     content.Parent = controlPanel
 
-    -- 使用 UIScale 来统一控制 UI 大小（现在作用于 controlPanel，背景与内部一起缩放）
+    -- 使用 UIScale 来统一控制 UI 大小（现在作用于 controlPanel,背景与内部一起缩放）
     local uiScale = Instance.new("UIScale")
     uiScale.Parent = controlPanel
     uiScale.Scale = math.clamp(_G.UIScaleValue or 1.0, 0.5, 1.0)
@@ -529,7 +529,7 @@ local function CreateMobileGUI()
         -- 仅在点击时缓存当前相机方向
         b.MouseButton1Click:Connect(function()
             _G.moveDirectionType = info.dir
-            CacheMoveDirection(info.dir) -- 这里是关键：单次缓存，不会每帧变化
+            CacheMoveDirection(info.dir) -- 这里是关键：单次缓存,不会每帧变化
             UpdateAllPartsVelocity()
         end)
     end
@@ -577,19 +577,19 @@ local function CreateMobileGUI()
     end)
 
     speedUp.MouseButton1Click:Connect(function()
-        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 0， 200)
+        _G.floatSpeed = math.clamp(_G.floatSpeed + 5, 0, 200)
         speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
         UpdateAllPartsVelocity()
     end)
 
     speedDown.MouseButton1Click:Connect(function()
-        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 0， 200)
+        _G.floatSpeed = math.clamp(_G.floatSpeed - 5, 0, 200)
         speedLabel.Text = "速度: " .. tostring(_G.floatSpeed)
         UpdateAllPartsVelocity()
     end)
 
     -- ================= UI大小控制 =================
-    -- 默认 1.0，最小 0.5，最大 1.0，步进 0.1
+    -- 默认 1.0,最小 0.5,最大 1.0,步进 0.1
     local uiScaleLabel = Instance.new("TextLabel")
     uiScaleLabel.Size = UDim2.new(0.85,0,0,30)
     uiScaleLabel.Position = UDim2.new(0.075,0,0,340)

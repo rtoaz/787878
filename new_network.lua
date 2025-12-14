@@ -118,14 +118,53 @@ end
 local function ReleaseNetworkOwnershipForPart(part)
     if not part or not part:IsA("BasePart") then return end
     pcall(function()
-        if part.SetNetworkOwner then part:SetNetworkOwner(nil) end
+        -- 仅在 API 可用时操作
+        if part.SetNetworkOwner then
+            -- 如果已经被释放则跳过；使用本地缓存判断，避免频繁调用
+            local data = _G.processedParts[part]
+            if data and data.networkOwned then
+                -- 节流：避免短时间内重复切换
+                local now = tick()
+                if data.lastNetworkChange and (now - data.lastNetworkChange) < 0.5 then
+                    return
+                end
+                pcall(function() part:SetNetworkOwner(nil) end)
+                data.networkOwned = false
+                data.lastNetworkChange = now
+            else
+                -- 如果没有缓存，但 API 存在，仍尝试一次安全释放
+                pcall(function() part:SetNetworkOwner(nil) end)
+                if data then
+                    data.networkOwned = false
+                    data.lastNetworkChange = tick()
+                end
+            end
+        end
     end)
 end
 
 local function AssignNetworkOwnershipToPart(part)
     if not part or not part:IsA("BasePart") then return end
     pcall(function()
-        if part.SetNetworkOwner then part:SetNetworkOwner(LocalPlayer) end
+        if part.SetNetworkOwner then
+            local data = _G.processedParts[part]
+            local now = tick()
+            -- 如果已经标记为已赋权则跳过，避免重复调用
+            if data and data.networkOwned then
+                -- 如果最近刚变更过也跳过
+                if data.lastNetworkChange and (now - data.lastNetworkChange) < 0.5 then
+                    return
+                end
+            end
+            -- 赋权尝试（安全 pcall）
+            pcall(function() part:SetNetworkOwner(LocalPlayer) end)
+            if not data then
+                data = _G.processedParts[part] or {}
+                _G.processedParts[part] = data
+            end
+            data.networkOwned = true
+            data.lastNetworkChange = now
+        end
     end)
 end
 
@@ -137,8 +176,12 @@ local function CleanupParts()
         pcall(function()
             if data.bodyGyro then data.bodyGyro:Destroy() end
         end)
-        -- 释放网络所有权
-        pcall(function() ReleaseNetworkOwnershipForPart(part) end)
+        -- 释放网络所有权（仅在我们缓存中标记为已赋权时）
+        pcall(function()
+            if data.networkOwned then
+                ReleaseNetworkOwnershipForPart(part)
+            end
+        end)
     end
     _G.processedParts = {}
     if updateConnection then
@@ -191,9 +234,11 @@ local function ProcessPart(part)
     local entry = _G.processedParts[part]
     if entry and entry.bodyVelocity and entry.bodyVelocity.Parent then
         entry.bodyVelocity.Velocity = CalculateMoveDirection() * _G.floatSpeed
-        -- 如果启用了网络所有权,确保已经赋予
+        -- 如果启用了网络所有权,确保已经赋予（只在缓存显示尚未赋权时尝试）
         if _G.useNetworkOwnership then
-            pcall(function() AssignNetworkOwnershipToPart(part) end)
+            if not entry.networkOwned then
+                pcall(function() AssignNetworkOwnershipToPart(part) end)
+            end
         end
         return
     end
@@ -234,6 +279,8 @@ local function ProcessPart(part)
     _G.processedParts[part] = {
         bodyVelocity = bv,
         bodyGyro = bg,
+        networkOwned = _G.useNetworkOwnership and true or false,
+        lastNetworkChange = tick()
     }
 end
 
@@ -318,8 +365,10 @@ local function ToggleNetworkOwnership()
     for part, data in pairs(_G.processedParts) do
         if _G.useNetworkOwnership then
             pcall(function() AssignNetworkOwnershipToPart(part) end)
+            -- 标记为已赋权（Assign 会更新缓存）
         else
             pcall(function() ReleaseNetworkOwnershipForPart(part) end)
+            -- 标记为未赋权（Release 会更新缓存）
         end
     end
     return _G.useNetworkOwnership

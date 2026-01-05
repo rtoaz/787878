@@ -19,7 +19,7 @@ end
 -- 作者提示
 pcall(function()
     local authorMessage = Instance.new("Message")
-    authorMessage.Text = "全局物体漂浮脚本 - 原作者: XTTT\n此脚本为免费脚本,禁止贩卖\n由Star_Skater53修改"
+    authorMessage.Text = "全局物体漂浮脚本 - 原作者: ciTiy\n此脚本为免费脚本,禁止贩卖\n由Star_Skater53修改"
     authorMessage.Parent = Workspace
     task.delay(3, function()
         if authorMessage and authorMessage.Parent then

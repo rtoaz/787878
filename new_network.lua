@@ -35,7 +35,7 @@ local HUGE_VEC       = Vector3.new(math.huge, math.huge, math.huge)
 local ZERO_VEC       = Vector3.new(0, 0, 0)
 local NET_THROTTLE   = 0.5   -- 网络所有权最小切换间隔（秒）
 local SWEEP_INTERVAL = 2     -- 清理已销毁部件的间隔（秒）
-local SPEED_MIN      = 0
+local SPEED_MIN      = 1
 local SPEED_MAX      = 200
 local WINDUI_URL     = "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
 
@@ -50,22 +50,44 @@ local State = {
     networkOwnership = false,               -- 网络所有权
     dead             = false,               -- 玩家是否死亡
     destroyed        = false,               -- 脚本是否已卸载
+
+    -- 导航模式（定位棒）
+    navToolEnabled   = true,                -- 是否在背包里生成定位棒
+    navTarget        = nil,                 -- 导航目标点 Vector3
+    navRadius        = 6,                   -- 到达半径
+    navScope         = "all",               -- "all" = 全部漂浮物 / "nearest" = 最近的一个
+    navShowMarker    = true,                -- 显示目标标记
 }
 
--- [BasePart] = { bv = BodyVelocity, bg = BodyGyro, netOwned = bool, lastNet = number }
+-- [BasePart] = { bv, bg, netOwned, lastNet, nav }
 local processed = {}
 
 local heartbeatConn          -- RunService.Heartbeat 连接
 local sweepTimer = 0         -- 距离下次清理累计的时间
 local simLoopRunning = false -- 模拟半径协程是否在跑
 
+-- GUI 构建后注入的钩子，用来让界面状态跟随脚本状态
+local UIHooks = {
+    setActive = nil,
+    notify    = nil,
+}
+
+local suppressToggleCallback = false -- 程序化改开关时不重复触发回调
+
+local function notify(title, content, duration)
+    if UIHooks.notify then
+        pcall(UIHooks.notify, title, content, duration)
+    end
+end
+
 local DIRECTIONS = {
-    { label = "向上", key = "up"      },
-    { label = "向下", key = "down"    },
-    { label = "向前", key = "forward" },
-    { label = "向后", key = "back"    },
-    { label = "向左", key = "left"    },
-    { label = "向右", key = "right"   },
+    { label = "向上",     key = "up"      },
+    { label = "向下",     key = "down"    },
+    { label = "向前",     key = "forward" },
+    { label = "向后",     key = "back"    },
+    { label = "向左",     key = "left"    },
+    { label = "向右",     key = "right"   },
+    { label = "跟随视角", key = "camera"  },
 }
 
 local DIR_LABEL_TO_KEY = {}
@@ -116,6 +138,13 @@ local function cacheDirection(dir)
 
     local cf = cam.CFrame
     local look, right = cf.LookVector, cf.RightVector
+
+    -- 跟随视角：直接朝相机正前方（含俯仰），心跳里每帧重新取
+    if dir == "camera" then
+        State.vector = look
+        return
+    end
+
     local v
     if dir == "forward" then
         v = Vector3.new(look.X, 0, look.Z)
@@ -172,7 +201,9 @@ local function processPart(part)
 
     local data = processed[part]
     if data and data.bv and data.bv.Parent then
-        data.bv.Velocity = currentVelocity()
+        if not data.nav then
+            data.bv.Velocity = currentVelocity()
+        end
         if State.networkOwnership then
             setNetworkOwnership(part, data, true)
         end
@@ -203,6 +234,10 @@ local function processPart(part)
     end
 
     data = { bv = bv, bg = bg, netOwned = false, lastNet = 0 }
+    -- 导航进行中才加入的部件，按当前范围决定要不要一起走
+    if State.navTarget and State.navScope == "all" then
+        data.nav = true
+    end
     processed[part] = data
 
     if State.networkOwnership then
@@ -230,12 +265,15 @@ local function processAllParts()
 end
 
 -- 把所有 BodyMover 的速度刷新为当前值
+-- 正在导航的部件由导航逻辑接管，这里跳过
 local function refreshVelocities()
     local v = currentVelocity()
     for _, data in pairs(processed) do
-        local bv = data.bv
-        if bv and bv.Parent then
-            bv.Velocity = v
+        if not data.nav then
+            local bv = data.bv
+            if bv and bv.Parent then
+                bv.Velocity = v
+            end
         end
     end
 end
@@ -261,15 +299,236 @@ local function cleanupAll(releaseNetwork)
 end
 
 --=============================================================================
--- 5. 心跳循环
+-- 5. 导航模式（定位棒）
+--=============================================================================
+local AVOID_LOOKAHEAD = 8   -- 避障探测距离（studs）
+local AVOID_INTERVAL  = 0.1 -- 单个部件的避障射线刷新间隔（秒）
+
+local navParams = RaycastParams.new()
+navParams.FilterType = Enum.RaycastFilterType.Exclude
+navParams.IgnoreWater = true
+navParams.FilterDescendantsInstances = {}
+
+local targetMarker -- 目标点标记
+
+-- 导航射线要忽略玩家、目标标记和所有漂浮物，否则部件会互相挡路
+local function refreshNavFilter()
+    local list = {}
+    local char = LocalPlayer.Character
+    if char then
+        list[#list + 1] = char
+    end
+    if targetMarker then
+        list[#list + 1] = targetMarker
+    end
+    for part in pairs(processed) do
+        list[#list + 1] = part
+    end
+    navParams.FilterDescendantsInstances = list
+end
+
+local function destroyMarker()
+    if not targetMarker then return end
+    local m = targetMarker
+    targetMarker = nil
+    pcall(function() m:Destroy() end)
+end
+
+local function ensureMarker()
+    if not State.navShowMarker then
+        destroyMarker()
+        return nil
+    end
+    if targetMarker and targetMarker.Parent then
+        return targetMarker
+    end
+
+    local m = Instance.new("Part")
+    m.Name         = "FloatNavTarget"
+    m.Shape        = Enum.PartType.Ball
+    m.Size         = Vector3.new(1.6, 1.6, 1.6)
+    m.Anchored     = true
+    m.CanCollide   = false
+    m.CanQuery     = false
+    m.CanTouch     = false
+    m.CastShadow   = false
+    m.Material     = Enum.Material.Neon
+    m.Color        = Color3.fromRGB(90, 200, 255)
+    m.Transparency = 0.25
+    m.Parent       = Workspace
+
+    targetMarker = m
+    return m
+end
+
+local function clearNavTarget()
+    if not State.navTarget then return end
+    State.navTarget = nil
+    for _, data in pairs(processed) do
+        data.nav = false
+    end
+    destroyMarker()
+    refreshVelocities()
+end
+
+-- 返回 true 表示该部件已经就位
+local function steerTowards(part, data)
+    local bv = data.bv
+    if not bv or not bv.Parent then return true end
+
+    local target = State.navTarget
+    if not target then return true end
+
+    if not State.moving then
+        bv.Velocity = ZERO_VEC
+        return false
+    end
+
+    local offset = target - part.Position
+    local dist = offset.Magnitude
+    if dist <= State.navRadius then
+        bv.Velocity = ZERO_VEC
+        return true
+    end
+
+    local dir = offset / dist
+
+    -- 最简避障：正前方被挡住时，贴着障碍表面切向绕行
+    -- 射线按部件错峰刷新，避免部件一多就变成每帧几百次 Raycast
+    local now = os.clock()
+    if not data.navNext then
+        data.navNext = now + AVOID_INTERVAL * math.random()
+    end
+    if now >= data.navNext then
+        data.navNext = now + AVOID_INTERVAL
+        local hit = Workspace:Raycast(part.Position, dir * AVOID_LOOKAHEAD, navParams)
+        data.navNormal = hit and hit.Normal or nil
+    end
+
+    if data.navNormal then
+        local n = data.navNormal
+        local slide = dir - n * dir:Dot(n)
+        dir = slide.Magnitude > 0.05 and slide.Unit or n
+        dir = (dir + Vector3.new(0, 0.3, 0)).Unit
+    end
+
+    -- 快到时减速，避免在目标点附近来回抖
+    local speed = State.speed
+    local slowRadius = math.max(State.navRadius * 2, 8)
+    if dist < slowRadius then
+        speed = speed * (dist / slowRadius)
+    end
+
+    bv.Velocity = dir * speed
+    return false
+end
+
+-- 按当前范围选定参与导航的部件
+local function selectNavTargets()
+    for _, data in pairs(processed) do
+        data.nav       = false
+        data.navNormal = nil
+        data.navNext   = nil
+    end
+
+    if State.navScope == "nearest" then
+        local target = State.navTarget
+        local best, bestDist
+        for part in pairs(processed) do
+            local d = (part.Position - target).Magnitude
+            if not bestDist or d < bestDist then
+                best, bestDist = part, d
+            end
+        end
+        if best and processed[best] then
+            processed[best].nav = true
+        end
+    else
+        for _, data in pairs(processed) do
+            data.nav = true
+        end
+    end
+end
+
+local function setNavTarget(position)
+    if not State.active then
+        notify("无法导航", "请先打开「启用漂浮」", 2)
+        return false
+    end
+    if next(processed) == nil then
+        notify("无法导航", "场景里还没有漂浮物", 2)
+        return false
+    end
+
+    State.navTarget = position
+
+    local marker = ensureMarker()
+    if marker then
+        marker.Position = position
+    end
+
+    selectNavTargets()
+    refreshNavFilter()
+    return true
+end
+
+local function setNavScope(scope)
+    State.navScope = scope
+    if State.navTarget then
+        selectNavTargets()
+    end
+end
+
+local function setNavRadius(radius)
+    State.navRadius = math.clamp(radius, 2, 30)
+end
+
+local function setMarkerVisible(visible)
+    State.navShowMarker = visible
+    if not visible then
+        destroyMarker()
+    elseif State.navTarget then
+        local marker = ensureMarker()
+        if marker then
+            marker.Position = State.navTarget
+        end
+        refreshNavFilter()
+    end
+end
+
+--=============================================================================
+-- 6. 心跳循环
 --=============================================================================
 local function onHeartbeat(dt)
     if State.dead then return end
+
+    -- 跟随视角：相机方向每帧都在变，只能逐帧重取并刷新速度
+    if State.direction == "camera" and State.active and State.moving then
+        cacheDirection("camera")
+        refreshVelocities()
+    end
 
     -- 防止旋转：清零角速度，让 BodyGyro 更稳
     if State.fixedRotation then
         for part in pairs(processed) do
             pcall(zeroAngularVelocity, part)
+        end
+    end
+
+    -- 导航：逐帧转向，全部就位后自动结束
+    if State.navTarget then
+        local total, pending = 0, 0
+        for part, data in pairs(processed) do
+            if data.nav then
+                total += 1
+                if not steerTowards(part, data) then
+                    pending += 1
+                end
+            end
+        end
+        if total > 0 and pending == 0 then
+            notify("导航完成", "漂浮物已到达目标点", 2)
+            clearNavTarget()
         end
     end
 
@@ -280,6 +539,9 @@ local function onHeartbeat(dt)
         sweepTimer = 0
         sweepDestroyedParts()
         refreshVelocities()
+        if State.navTarget then
+            refreshNavFilter()
+        end
     end
 end
 
@@ -296,12 +558,12 @@ local function setHeartbeat(enabled)
 end
 
 --=============================================================================
--- 6. 对外动作
+-- 7. 对外动作
 --=============================================================================
 local function startFloat()
     if State.dead or State.destroyed then return false end
     State.active = true
-    State.moving = true
+    -- 不改 moving，「允许移动」开关说了算
     processAllParts()
     setHeartbeat(true)
     return true
@@ -309,6 +571,7 @@ end
 
 local function stopFloat(releaseNetwork)
     State.active = false
+    clearNavTarget()
     cleanupAll(releaseNetwork)
     setHeartbeat(false)
     return true
@@ -321,10 +584,8 @@ end
 
 local function setSpeed(speed)
     State.speed = math.clamp(speed, SPEED_MIN, SPEED_MAX)
-    if State.active then
-        State.moving = true
-        refreshVelocities()
-    end
+    -- 注意：这里不改 moving，否则「允许移动」关着调速度会让物体动起来
+    refreshVelocities()
 end
 
 local function setMoving(moving)
@@ -335,8 +596,6 @@ end
 local function setDirection(dirKey)
     State.direction = dirKey
     cacheDirection(dirKey)
-    -- 选了新方向就恢复移动
-    State.moving = true
     refreshVelocities()
 end
 
@@ -376,7 +635,7 @@ local function setNetworkOwnershipEnabled(enabled)
 end
 
 --=============================================================================
--- 7. 模拟半径（原版每帧调用两次，这里改成 1 秒一次）
+-- 8. 模拟半径（原版每帧调用两次，这里改成 1 秒一次）
 --=============================================================================
 local function startSimulationRadius()
     if type(sethiddenproperty) ~= "function" then
@@ -398,15 +657,110 @@ local function startSimulationRadius()
 end
 
 --=============================================================================
--- 8. 死亡 / 重生
+-- 9. 定位棒（导航工具）
 --=============================================================================
--- GUI 构建后注入的钩子，用来让界面状态跟随脚本状态
-local UIHooks = {
-    setActive = nil,
-    notify    = nil,
-}
+local NAV_TOOL_NAME = "定位棒"
 
-local suppressToggleCallback = false -- 程序化改开关时不重复触发回调
+local function findNavTool()
+    local char = LocalPlayer.Character
+    if char then
+        local t = char:FindFirstChild(NAV_TOOL_NAME)
+        if t then return t end
+    end
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        return backpack:FindFirstChild(NAV_TOOL_NAME)
+    end
+    return nil
+end
+
+local function removeNavTool()
+    local existing = findNavTool()
+    if existing then
+        pcall(function() existing:Destroy() end)
+    end
+end
+
+-- 用鼠标位置打一条射线取世界坐标
+local function mouseTargetPosition()
+    local cam = Workspace.CurrentCamera
+    if not cam then return nil end
+
+    local mouse = LocalPlayer:GetMouse()
+    local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
+
+    local params = RaycastParams.new()
+    params.FilterType  = Enum.RaycastFilterType.Exclude
+    params.IgnoreWater = true
+    local filter = {}
+    local char = LocalPlayer.Character
+    if char then filter[#filter + 1] = char end
+    if targetMarker then filter[#filter + 1] = targetMarker end
+    params.FilterDescendantsInstances = filter
+
+    local result = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
+    if result then
+        return result.Position
+    end
+    -- 没打到东西就落在相机正前方
+    return ray.Origin + ray.Direction * 500
+end
+
+local function giveNavTool()
+    if not State.navToolEnabled or State.destroyed then return end
+    if findNavTool() then return end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not backpack then return end
+
+    local tool = Instance.new("Tool")
+    tool.Name           = NAV_TOOL_NAME
+    tool.RequiresHandle = false
+    tool.CanBeDropped   = false
+    tool.ToolTip        = "手持后左键点击地面，漂浮物会自动飞向该点"
+    tool.Parent         = backpack
+
+    -- Destroy 时会自动断开连接，不需要额外保存
+    tool.Activated:Connect(function()
+        local pos = mouseTargetPosition()
+        if pos then
+            setNavTarget(pos)
+        end
+    end)
+end
+
+-- 背包在重生后会重建，所以这里每次都用 WaitForChild 兜底
+local function refreshNavTool()
+    if not State.navToolEnabled or State.destroyed then
+        removeNavTool()
+        return
+    end
+
+    task.spawn(function()
+        local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+        if not backpack then
+            backpack = LocalPlayer:WaitForChild("Backpack", 10)
+        end
+        if backpack then
+            giveNavTool()
+        end
+    end)
+end
+
+local function setNavToolEnabled(enabled)
+    State.navToolEnabled = enabled
+    if enabled then
+        refreshNavTool()
+        notify("定位棒", "已放入背包，手持后左键点击即可设置目标", 3)
+    else
+        removeNavTool()
+        notify("定位棒", "已从背包移除", 2)
+    end
+end
+
+--=============================================================================
+-- 10. 死亡 / 重生
+--=============================================================================
 local humanoidDiedConn
 
 local function syncActive(enabled)
@@ -429,6 +783,9 @@ local function onCharacterAdded(char)
         humanoidDiedConn = nil
     end
 
+    -- 重生后背包会重建，这里重新放回定位棒
+    task.delay(0.5, refreshNavTool)
+
     local humanoid = char:WaitForChild("Humanoid", 10)
     if not humanoid then return end
 
@@ -449,8 +806,11 @@ end
 -- 模拟半径常驻（1 秒一次，比原版每帧两次轻得多）
 startSimulationRadius()
 
+-- 首次放入定位棒
+refreshNavTool()
+
 --=============================================================================
--- 9. 界面（WindUI）
+-- 11. 界面（WindUI）
 --=============================================================================
 local Window             -- 当前窗口
 local uiToggleActive     -- 「启用漂浮」开关
@@ -459,12 +819,10 @@ local uiToggleFixed      -- 「防止旋转」开关
 local uiToggleNetwork    -- 「网络所有权」开关
 local uiSliderSpeed      -- 「漂浮速度」滑块
 local uiDropdownDir      -- 「移动方向」下拉
-
-local function notify(title, content, duration)
-    if UIHooks.notify then
-        pcall(UIHooks.notify, title, content, duration)
-    end
-end
+local uiToggleNavTool    -- 「启用定位棒」开关
+local uiDropdownNavScope -- 「导航对象」下拉
+local uiSliderNavRadius  -- 「到达半径」滑块
+local uiToggleNavMarker  -- 「显示目标标记」开关
 
 -- 卸载：停循环、清漂浮物、销毁界面
 local function teardown()
@@ -472,6 +830,7 @@ local function teardown()
     State.destroyed = true
 
     stopFloat(true)
+    removeNavTool()
     simLoopRunning = false
 
     if humanoidDiedConn then
@@ -499,6 +858,9 @@ local function resetSettings()
     if uiToggleMove then uiToggleMove:Set(true) end
     if uiToggleFixed then uiToggleFixed:Set(false) end
     if uiToggleNetwork then uiToggleNetwork:Set(false) end
+    if uiDropdownNavScope then uiDropdownNavScope:Select({ "全部漂浮物" }) end
+    if uiSliderNavRadius then uiSliderNavRadius:Set(6) end
+    if uiToggleNavMarker then uiToggleNavMarker:Set(true) end
 end
 
 local function createInterface()
@@ -609,7 +971,7 @@ local function createInterface()
 
     uiDropdownDir = MainTab:Dropdown({
         Title    = "移动方向",
-        Desc     = "前后左右基于切换时相机的朝向",
+        Desc     = "前后左右按切换时的相机朝向；「跟随视角」会实时朝相机前方飞",
         Values   = DIR_LABELS,
         Value    = "向上",
         Callback = function(selected)
@@ -687,6 +1049,81 @@ local function createInterface()
         TextTransparency = 0.5,
     })
 
+    --=========================== 导航页 ===========================
+    local NavTab = Window:Tab({ Title = "导航", Icon = "navigation" })
+
+    NavTab:Section({ Title = "定位棒", TextSize = 16, TextTransparency = 0.35 })
+
+    uiToggleNavTool = NavTab:Toggle({
+        Title = "启用定位棒",
+        Desc  = "在背包中生成「定位棒」，手持后左键点击即可设置导航目标",
+        Value = true,
+        Callback = function(state)
+            setNavToolEnabled(state)
+        end,
+    })
+
+    NavTab:Space()
+    NavTab:Section({ Title = "导航设置", TextSize = 16, TextTransparency = 0.35 })
+
+    uiDropdownNavScope = NavTab:Dropdown({
+        Title  = "导航对象",
+        Desc   = "设置目标后哪些漂浮物会飞过去",
+        Values = { "全部漂浮物", "最近的一个" },
+        Value  = "全部漂浮物",
+        Callback = function(selected)
+            setNavScope(selected == "最近的一个" and "nearest" or "all")
+        end,
+    })
+
+    NavTab:Space()
+
+    uiSliderNavRadius = NavTab:Slider({
+        Title = "到达半径",
+        Desc  = "距离目标小于该值就停下",
+        Step  = 1,
+        Value = { Min = 2, Max = 30, Default = State.navRadius },
+        Callback = function(value)
+            setNavRadius(value)
+        end,
+    })
+
+    NavTab:Space()
+
+    uiToggleNavMarker = NavTab:Toggle({
+        Title = "显示目标标记",
+        Desc  = "在目标点生成一个蓝色光球",
+        Value = true,
+        Callback = function(state)
+            setMarkerVisible(state)
+        end,
+    })
+
+    NavTab:Space()
+
+    NavTab:Button({
+        Title = "清除导航目标",
+        Desc  = "漂浮物就地停下，恢复原来的漂浮方向",
+        Icon  = "circle-slash",
+        Callback = function()
+            if not State.navTarget then
+                notify("无目标", "当前没有正在进行的导航", 2)
+                return
+            end
+            clearNavTarget()
+            notify("已清除", "漂浮物已恢复原方向", 2)
+        end,
+    })
+
+    NavTab:Space()
+
+    NavTab:Section({
+        Title            = "说明",
+        Desc             = "导航会让漂浮物自动绕开障碍飞向目标点；若中途关掉「启用漂浮」，导航会一并结束。",
+        TextSize         = 14,
+        TextTransparency = 0.5,
+    })
+
     --=========================== 设置页 ===========================
     local SetTab = Window:Tab({ Title = "设置", Icon = "settings" })
 
@@ -728,7 +1165,7 @@ local function createInterface()
 
     SetTab:Button({
         Title = "重置所有设置",
-        Desc  = "速度、方向、物理选项恢复默认",
+        Desc  = "速度、方向、物理与导航选项恢复默认",
         Icon  = "rotate-ccw",
         Callback = function()
             resetSettings()
@@ -757,7 +1194,7 @@ local function createInterface()
 end
 
 --=============================================================================
--- 10. 启动
+-- 12. 启动
 --=============================================================================
 -- 重复执行时先清理上一次的残留
 if _G.__GlobalFloat then

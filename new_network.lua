@@ -432,10 +432,23 @@ local function selectNavTargets()
     end
 
     if State.navScope == "nearest" then
-        local target = State.navTarget
+        -- 「最近的一个」= 离本地玩家最近的漂浮物（不是离目标点最近）
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        local origin
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            origin = root.Position
+        else
+            local ok, pivot = pcall(function() return char:GetPivot().Position end)
+            if ok then origin = pivot end
+        end
+        if not origin then return end
+
         local best, bestDist
         for part in pairs(processed) do
-            local d = (part.Position - target).Magnitude
+            local d = (part.Position - origin).Magnitude
             if not bestDist or d < bestDist then
                 best, bestDist = part, d
             end
@@ -476,6 +489,8 @@ local function setNavScope(scope)
     State.navScope = scope
     if State.navTarget then
         selectNavTargets()
+        -- 不再参与导航的部件立刻恢复原来的漂移方向
+        refreshVelocities()
     end
 end
 
@@ -692,10 +707,16 @@ local function mouseTargetPosition()
     local params = RaycastParams.new()
     params.FilterType  = Enum.RaycastFilterType.Exclude
     params.IgnoreWater = true
+
+    -- 必须排除所有漂浮物：否则射线打在物体表面上，目标点几乎贴着物体，
+    -- 选「最近的一个」时会瞬间判定到达，看起来就像什么都没动
     local filter = {}
     local char = LocalPlayer.Character
     if char then filter[#filter + 1] = char end
     if targetMarker then filter[#filter + 1] = targetMarker end
+    for part in pairs(processed) do
+        filter[#filter + 1] = part
+    end
     params.FilterDescendantsInstances = filter
 
     local result = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
@@ -1068,7 +1089,7 @@ local function createInterface()
 
     uiDropdownNavScope = NavTab:Dropdown({
         Title  = "导航对象",
-        Desc   = "设置目标后哪些漂浮物会飞过去",
+        Desc   = "「最近的一个」指离你最近的漂浮物",
         Values = { "全部漂浮物", "最近的一个" },
         Value  = "全部漂浮物",
         Callback = function(selected)

@@ -69,6 +69,7 @@ local simLoopRunning = false -- 模拟半径协程是否在跑
 -- GUI 构建后注入的钩子，用来让界面状态跟随脚本状态
 local UIHooks = {
     setActive = nil,
+    setMoving = nil,
     notify    = nil,
 }
 
@@ -310,6 +311,7 @@ navParams.IgnoreWater = true
 navParams.FilterDescendantsInstances = {}
 
 local targetMarker -- 目标点标记
+local navHighlight -- 「最近的一个」模式下高亮正在导航的部件
 
 -- 导航射线要忽略玩家、目标标记和所有漂浮物，否则部件会互相挡路
 local function refreshNavFilter()
@@ -361,6 +363,25 @@ local function ensureMarker()
     return m
 end
 
+local function setNavHighlight(part)
+    if navHighlight then
+        local h = navHighlight
+        navHighlight = nil
+        pcall(function() h:Destroy() end)
+    end
+    if not part then return end
+
+    local h = Instance.new("Highlight")
+    h.FillColor           = Color3.fromRGB(90, 200, 255)
+    h.OutlineColor        = Color3.fromRGB(255, 255, 255)
+    h.FillTransparency    = 0.65
+    h.OutlineTransparency = 0
+    h.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Adornee             = part
+    h.Parent              = part
+    navHighlight = h
+end
+
 local function clearNavTarget()
     if not State.navTarget then return end
     State.navTarget = nil
@@ -368,27 +389,35 @@ local function clearNavTarget()
         data.nav = false
     end
     destroyMarker()
+    setNavHighlight(nil)
     refreshVelocities()
 end
 
--- 返回 true 表示该部件已经就位
 local function steerTowards(part, data)
     local bv = data.bv
-    if not bv or not bv.Parent then return true end
+    if not bv or not bv.Parent then
+        -- BodyVelocity 被外部清理掉时重建，不要把这种情况当成"已到达"
+        processPart(part)
+        data = processed[part]
+        if not data then return end
+        data.nav       = true
+        bv             = data.bv
+        if not bv or not bv.Parent then return end
+    end
 
     local target = State.navTarget
-    if not target then return true end
+    if not target then return end
 
     if not State.moving then
         bv.Velocity = ZERO_VEC
-        return false
+        return
     end
 
     local offset = target - part.Position
     local dist = offset.Magnitude
     if dist <= State.navRadius then
         bv.Velocity = ZERO_VEC
-        return true
+        return
     end
 
     local dir = offset / dist
@@ -420,7 +449,6 @@ local function steerTowards(part, data)
     end
 
     bv.Velocity = dir * speed
-    return false
 end
 
 -- 按当前范围选定参与导航的部件
@@ -430,6 +458,7 @@ local function selectNavTargets()
         data.navNormal = nil
         data.navNext   = nil
     end
+    setNavHighlight(nil)
 
     if State.navScope == "nearest" then
         -- 「最近的一个」= 离本地玩家最近的漂浮物（不是离目标点最近）
@@ -455,6 +484,7 @@ local function selectNavTargets()
         end
         if best and processed[best] then
             processed[best].nav = true
+            setNavHighlight(best)
         end
     else
         for _, data in pairs(processed) do
@@ -481,7 +511,21 @@ local function setNavTarget(position)
     end
 
     selectNavTargets()
+
+    local count = 0
+    for _, data in pairs(processed) do
+        if data.nav then
+            count += 1
+        end
+    end
+    if count == 0 then
+        notify("未选中漂浮物", "当前范围内没有可导航的部件", 2)
+        clearNavTarget()
+        return false
+    end
+
     refreshNavFilter()
+    notify("导航目标已设置", "已锁定 " .. count .. " 个漂浮物", 1.5)
     return true
 end
 
@@ -530,20 +574,37 @@ local function onHeartbeat(dt)
         end
     end
 
-    -- 导航：逐帧转向，全部就位后自动结束
+    -- 导航：逐帧转向，按真实距离判断是否全部就位
+    -- （不再依赖 steerTowards 的返回值，避免异常情况被误判成"已到达"）
     if State.navTarget then
+        local target = State.navTarget
         local total, pending = 0, 0
         for part, data in pairs(processed) do
             if data.nav then
                 total += 1
-                if not steerTowards(part, data) then
+                if (part.Position - target).Magnitude > State.navRadius then
                     pending += 1
+                    steerTowards(part, data)
+                else
+                    local bv = data.bv
+                    if bv and bv.Parent then
+                        bv.Velocity = ZERO_VEC
+                    end
                 end
             end
         end
         if total > 0 and pending == 0 then
-            notify("导航完成", "漂浮物已到达目标点", 2)
+            -- 到达后自动关闭「允许移动」，部件停在原地
+            State.moving = false
             clearNavTarget()
+
+            if UIHooks.setMoving then
+                suppressToggleCallback = true
+                pcall(UIHooks.setMoving, false)
+                suppressToggleCallback = false
+            end
+
+            notify("导航完成", "已到达目标点，允许移动已自动关闭", 2)
         end
     end
 
@@ -727,6 +788,23 @@ local function mouseTargetPosition()
     return ray.Origin + ray.Direction * 500
 end
 
+local lastNavClick = 0
+
+-- Tool.Activated 与下面的鼠标兜底可能同时触发，做一次去重
+local function tryActivateNav()
+    local tool = findNavTool()
+    if not tool or tool.Parent ~= LocalPlayer.Character then return end
+
+    local now = os.clock()
+    if now - lastNavClick < 0.15 then return end
+    lastNavClick = now
+
+    local pos = mouseTargetPosition()
+    if pos then
+        setNavTarget(pos)
+    end
+end
+
 local function giveNavTool()
     if not State.navToolEnabled or State.destroyed then return end
     if findNavTool() then return end
@@ -742,12 +820,7 @@ local function giveNavTool()
     tool.Parent         = backpack
 
     -- Destroy 时会自动断开连接，不需要额外保存
-    tool.Activated:Connect(function()
-        local pos = mouseTargetPosition()
-        if pos then
-            setNavTarget(pos)
-        end
-    end)
+    tool.Activated:Connect(tryActivateNav)
 end
 
 -- 背包在重生后会重建，所以这里每次都用 WaitForChild 兜底
@@ -778,6 +851,15 @@ local function setNavToolEnabled(enabled)
         notify("定位棒", "已从背包移除", 2)
     end
 end
+
+-- 兜底：个别执行器/游戏会吞掉 Tool.Activated，这里补一条鼠标输入
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local navClickConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        tryActivateNav()
+    end
+end)
 
 --=============================================================================
 -- 10. 死亡 / 重生
@@ -853,6 +935,11 @@ local function teardown()
     stopFloat(true)
     removeNavTool()
     simLoopRunning = false
+
+    if navClickConn then
+        navClickConn:Disconnect()
+        navClickConn = nil
+    end
 
     if humanoidDiedConn then
         humanoidDiedConn:Disconnect()
@@ -971,9 +1058,16 @@ local function createInterface()
         Desc  = "关闭后部件保持漂浮但不再位移",
         Value = true,
         Callback = function(state)
+            if suppressToggleCallback then return end
             setMoving(state)
         end,
     })
+
+    UIHooks.setMoving = function(state)
+        if uiToggleMove then
+            uiToggleMove:Set(state)
+        end
+    end
 
     MainTab:Space()
     MainTab:Section({ Title = "运动参数", TextSize = 16, TextTransparency = 0.35 })

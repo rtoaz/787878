@@ -57,10 +57,18 @@ local State = {
     navRadius        = 6,                   -- 到达半径
     navScope         = "all",               -- "all" = 全部漂浮物 / "nearest" = 最近的一个
     navShowMarker    = true,                -- 显示目标标记
+    navAutoHover     = true,                -- 到达后自动关闭「允许移动」
+
+    -- 物体选择模式
+    selectionMode    = false,               -- 只漂浮选中的物体
 }
 
 -- [BasePart] = { bv, bg, netOwned, lastNet, nav }
 local processed = {}
+
+-- 选择模式下被选中的部件，以及它们的高亮
+local selected = {}
+local selectedHighlights = {}
 
 local heartbeatConn          -- RunService.Heartbeat 连接
 local sweepTimer = 0         -- 距离下次清理累计的时间
@@ -199,6 +207,8 @@ end
 local function processPart(part)
     if State.dead or State.destroyed then return end
     if not isEligible(part) then return end
+    -- 选择模式开启时，没被选中的部件不参与漂浮
+    if State.selectionMode and not selected[part] then return end
 
     local data = processed[part]
     if data and data.bv and data.bv.Parent then
@@ -287,6 +297,13 @@ local function sweepDestroyedParts()
             processed[part] = nil
         end
     end
+    -- 已销毁的选中项也要回收，否则会一直占着引用
+    for part in pairs(selected) do
+        if part.Parent == nil then
+            selected[part] = nil
+            selectedHighlights[part] = nil
+        end
+    end
 end
 
 local function cleanupAll(releaseNetwork)
@@ -297,6 +314,92 @@ local function cleanupAll(releaseNetwork)
         end
     end
     table.clear(processed)
+end
+
+--=============================================================================
+-- 4.5 物体选择
+--=============================================================================
+local function setSelectionHighlight(part, on)
+    local h = selectedHighlights[part]
+    if on then
+        if h then return end
+        h = Instance.new("Highlight")
+        h.FillColor           = Color3.fromRGB(120, 255, 160)
+        h.OutlineColor        = Color3.fromRGB(255, 255, 255)
+        h.FillTransparency    = 0.7
+        h.OutlineTransparency = 0
+        h.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+        h.Adornee             = part
+        h.Parent              = part
+        selectedHighlights[part] = h
+    elseif h then
+        selectedHighlights[part] = nil
+        pcall(function() h:Destroy() end)
+    end
+end
+
+local function selectedCount()
+    local n = 0
+    for _ in pairs(selected) do
+        n += 1
+    end
+    return n
+end
+
+local function setSelected(part, on)
+    if on then
+        if selected[part] then return end
+        selected[part] = true
+        setSelectionHighlight(part, true)
+        if State.active then
+            processPart(part)
+        end
+    else
+        if not selected[part] then return end
+        selected[part] = nil
+        setSelectionHighlight(part, false)
+        local data = processed[part]
+        if data then
+            destroyMovers(data)
+            processed[part] = nil
+        end
+    end
+end
+
+local function clearSelection()
+    local n = 0
+    for part in pairs(selected) do
+        selected[part] = nil
+        setSelectionHighlight(part, false)
+        -- 已经选中的部件如果正在漂浮，取消选择时要一起停掉
+        local data = processed[part]
+        if data then
+            destroyMovers(data)
+            processed[part] = nil
+        end
+        n += 1
+    end
+    table.clear(selectedHighlights)
+    if n > 0 then
+        refreshVelocities()
+    end
+    return n
+end
+
+-- 切换选择范围后重建：没选中的停掉，选中的接上
+local function applySelectionScope()
+    for part, data in pairs(processed) do
+        if not selected[part] then
+            destroyMovers(data)
+            processed[part] = nil
+        end
+    end
+    for part in pairs(selected) do
+        if part.Parent then
+            processPart(part)
+        end
+    end
+    refreshVelocities()
 end
 
 --=============================================================================
@@ -382,6 +485,30 @@ local function setNavHighlight(part)
     navHighlight = h
 end
 
+-- 导航跑独立的 Heartbeat 循环：主循环里任何提前返回或异常都不会拖累导航
+local navStep
+local navConn
+local navPrevSum = math.huge
+local navStall   = 0
+
+local function stopNavLoop()
+    if navConn then
+        navConn:Disconnect()
+        navConn = nil
+    end
+end
+
+local function startNavLoop()
+    if navConn then return end
+    navPrevSum = math.huge
+    navStall   = 0
+    navConn = RunService.Heartbeat:Connect(function(dt)
+        if navStep then
+            navStep(dt)
+        end
+    end)
+end
+
 local function clearNavTarget()
     if not State.navTarget then return end
     State.navTarget = nil
@@ -391,6 +518,7 @@ local function clearNavTarget()
     destroyMarker()
     setNavHighlight(nil)
     refreshVelocities()
+    stopNavLoop()
 end
 
 local function steerTowards(part, data)
@@ -451,6 +579,83 @@ local function steerTowards(part, data)
     bv.Velocity = dir * speed
 end
 
+-- 导航循环：逐帧转向，按真实距离判断是否全部就位
+function navStep(dt)
+    local target = State.navTarget
+    if not target then
+        stopNavLoop()
+        return
+    end
+
+    local total, pending, sumDist = 0, 0, 0
+    for part, data in pairs(processed) do
+        if data.nav then
+            total += 1
+            local d = (part.Position - target).Magnitude
+            sumDist += d
+
+            if d > State.navRadius then
+                pending += 1
+                local ok, err = pcall(steerTowards, part, data)
+                if not ok then
+                    warn("[GlobalFloat] 导航出错: " .. tostring(err))
+                end
+            else
+                local bv = data.bv
+                if bv and bv.Parent then
+                    bv.Velocity = ZERO_VEC
+                end
+            end
+        end
+    end
+
+    -- 总距离连续 6 秒没有缩短，说明该到的都到了（或剩下的卡住了），收尾
+    if sumDist < navPrevSum - 0.5 then
+        navPrevSum = sumDist
+        navStall   = 0
+    else
+        navStall += dt or 0
+    end
+
+    if total == 0 then
+        -- 参与导航的部件被取消选择/销毁了，收掉残留的目标标记
+        clearNavTarget()
+        return
+    end
+
+    if pending == 0 or navStall >= 6 then
+        local hover   = State.navAutoHover
+        local arrived = pending == 0
+        -- 「全部」模式下上百个部件挤在同一点，外圈必然被顶出到达半径，
+        -- 不能当成失败
+        local swarm   = State.navScope == "all"
+
+        if hover then
+            -- 先把速度关掉，clearNavTarget 内部刷新时算出来就是 0
+            State.moving = false
+        end
+
+        clearNavTarget()
+
+        if hover then
+            if UIHooks.setMoving then
+                suppressToggleCallback = true
+                pcall(UIHooks.setMoving, false)
+                suppressToggleCallback = false
+            end
+        end
+
+        local tail = hover and "，允许移动已自动关闭" or ""
+        if arrived then
+            notify("导航完成", "已到达目标点" .. tail, 2)
+        elseif swarm then
+            notify("导航完成", "漂浮物已聚集到目标点" .. tail, 2)
+        else
+            notify("导航结束", "漂浮物未能到达目标点" .. tail, 2)
+        end
+    end
+end
+
 -- 按当前范围选定参与导航的部件
 local function selectNavTargets()
     for _, data in pairs(processed) do
@@ -503,6 +708,17 @@ local function setNavTarget(position)
         return false
     end
 
+    -- 导航必然需要位移：如果「允许移动」关着，先自动打开
+    if not State.moving then
+        State.moving = true
+        if UIHooks.setMoving then
+            suppressToggleCallback = true
+            pcall(UIHooks.setMoving, true)
+            suppressToggleCallback = false
+        end
+        notify("允许移动", "导航需要位移，已自动开启", 1.5)
+    end
+
     State.navTarget = position
 
     local marker = ensureMarker()
@@ -525,6 +741,7 @@ local function setNavTarget(position)
     end
 
     refreshNavFilter()
+    startNavLoop()
     notify("导航目标已设置", "已锁定 " .. count .. " 个漂浮物", 1.5)
     return true
 end
@@ -574,39 +791,7 @@ local function onHeartbeat(dt)
         end
     end
 
-    -- 导航：逐帧转向，按真实距离判断是否全部就位
-    -- （不再依赖 steerTowards 的返回值，避免异常情况被误判成"已到达"）
-    if State.navTarget then
-        local target = State.navTarget
-        local total, pending = 0, 0
-        for part, data in pairs(processed) do
-            if data.nav then
-                total += 1
-                if (part.Position - target).Magnitude > State.navRadius then
-                    pending += 1
-                    steerTowards(part, data)
-                else
-                    local bv = data.bv
-                    if bv and bv.Parent then
-                        bv.Velocity = ZERO_VEC
-                    end
-                end
-            end
-        end
-        if total > 0 and pending == 0 then
-            -- 到达后自动关闭「允许移动」，部件停在原地
-            State.moving = false
-            clearNavTarget()
-
-            if UIHooks.setMoving then
-                suppressToggleCallback = true
-                pcall(UIHooks.setMoving, false)
-                suppressToggleCallback = false
-            end
-
-            notify("导航完成", "已到达目标点，允许移动已自动关闭", 2)
-        end
-    end
+    -- 导航在独立的 navStep 循环里执行（见 startNavLoop），这里不再处理
 
     -- 定时清掉已销毁的部件，并兜底刷新一次速度
     -- （原版是每帧刷新，这里降到每 2 秒一次，开销小了两个数量级）
@@ -852,12 +1037,151 @@ local function setNavToolEnabled(enabled)
     end
 end
 
+--=============================================================================
+-- 9.5 选择器（选物体工具）
+--=============================================================================
+local SELECTOR_TOOL_NAME = "选择器"
+
+local function findSelectorTool()
+    local char = LocalPlayer.Character
+    if char then
+        local t = char:FindFirstChild(SELECTOR_TOOL_NAME)
+        if t then return t end
+    end
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        return backpack:FindFirstChild(SELECTOR_TOOL_NAME)
+    end
+    return nil
+end
+
+local function removeSelectorTool()
+    local existing = findSelectorTool()
+    if existing then
+        pcall(function() existing:Destroy() end)
+    end
+end
+
+-- 用鼠标位置打射线，返回命中的部件（不排除漂浮物，因为就是要点它们）
+local function mouseTargetPart()
+    local cam = Workspace.CurrentCamera
+    if not cam then return nil end
+
+    local mouse = LocalPlayer:GetMouse()
+    local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
+
+    local params = RaycastParams.new()
+    params.FilterType  = Enum.RaycastFilterType.Exclude
+    params.IgnoreWater = true
+
+    local filter = {}
+    local char = LocalPlayer.Character
+    if char then filter[#filter + 1] = char end
+    if targetMarker then filter[#filter + 1] = targetMarker end
+    params.FilterDescendantsInstances = filter
+
+    local result = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
+    return result and result.Instance or nil
+end
+
+local lastSelectClick = 0
+
+local function tryActivateSelect()
+    local tool = findSelectorTool()
+    if not tool or tool.Parent ~= LocalPlayer.Character then return end
+
+    local now = os.clock()
+    if now - lastSelectClick < 0.15 then return end
+    lastSelectClick = now
+
+    local part = mouseTargetPart()
+    if not part then
+        notify("未选中", "准星没有指向任何物体", 1.5)
+        return
+    end
+    if not isEligible(part) then
+        notify("无法选择", "该物体不可漂浮（已锚定或属于角色）", 2)
+        return
+    end
+
+    if selected[part] then
+        setSelected(part, false)
+        notify("取消选择", part.Name .. " · 已选 " .. selectedCount() .. " 个", 1.5)
+    else
+        setSelected(part, true)
+        notify("已选择", part.Name .. " · 已选 " .. selectedCount() .. " 个", 1.5)
+    end
+end
+
+local function giveSelectorTool()
+    if not State.selectionMode or State.destroyed then return end
+    if findSelectorTool() then return end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not backpack then return end
+
+    local tool = Instance.new("Tool")
+    tool.Name           = SELECTOR_TOOL_NAME
+    tool.RequiresHandle = false
+    tool.CanBeDropped   = false
+    tool.ToolTip        = "手持后左键点击物体，切换它是否参与漂浮"
+    tool.Parent         = backpack
+
+    tool.Activated:Connect(tryActivateSelect)
+end
+
+-- 背包在重生后会重建，所以这里每次都用 WaitForChild 兜底
+local function refreshSelectorTool()
+    if not State.selectionMode or State.destroyed then
+        removeSelectorTool()
+        return
+    end
+
+    task.spawn(function()
+        local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+        if not backpack then
+            backpack = LocalPlayer:WaitForChild("Backpack", 10)
+        end
+        if backpack then
+            giveSelectorTool()
+        end
+    end)
+end
+
+local function setSelectionMode(enabled)
+    if State.selectionMode == enabled then return end
+    State.selectionMode = enabled
+
+    -- 参与漂浮的部件集合变了，进行中的导航先结束，避免留下悬空的标记
+    clearNavTarget()
+
+    if enabled then
+        refreshSelectorTool()
+        if State.active then
+            applySelectionScope()
+        end
+        local n = selectedCount()
+        if n == 0 then
+            notify("选择物体模式", "已开启：手持「选择器」左键点物体进行选择", 3)
+        else
+            notify("选择物体模式", "已开启：只漂浮选中的 " .. n .. " 个物体", 3)
+        end
+    else
+        removeSelectorTool()
+        if State.active then
+            processAllParts()
+        end
+        notify("选择物体模式", "已关闭，恢复漂浮全部物体", 2)
+    end
+end
+
 -- 兜底：个别执行器/游戏会吞掉 Tool.Activated，这里补一条鼠标输入
 local UserInputService = cloneref(game:GetService("UserInputService"))
 local navClickConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         tryActivateNav()
+        tryActivateSelect()
     end
 end)
 
@@ -886,8 +1210,9 @@ local function onCharacterAdded(char)
         humanoidDiedConn = nil
     end
 
-    -- 重生后背包会重建，这里重新放回定位棒
+    -- 重生后背包会重建，这里重新放回定位棒 / 选择器
     task.delay(0.5, refreshNavTool)
+    task.delay(0.5, refreshSelectorTool)
 
     local humanoid = char:WaitForChild("Humanoid", 10)
     if not humanoid then return end
@@ -918,6 +1243,7 @@ refreshNavTool()
 local Window             -- 当前窗口
 local uiToggleActive     -- 「启用漂浮」开关
 local uiToggleMove       -- 「允许移动」开关
+local uiToggleSelect     -- 「选择物体模式」开关
 local uiToggleFixed      -- 「防止旋转」开关
 local uiToggleNetwork    -- 「网络所有权」开关
 local uiSliderSpeed      -- 「漂浮速度」滑块
@@ -926,6 +1252,7 @@ local uiToggleNavTool    -- 「启用定位棒」开关
 local uiDropdownNavScope -- 「导航对象」下拉
 local uiSliderNavRadius  -- 「到达半径」滑块
 local uiToggleNavMarker  -- 「显示目标标记」开关
+local uiToggleNavHover   -- 「到达自动悬停」开关
 
 -- 卸载：停循环、清漂浮物、销毁界面
 local function teardown()
@@ -933,7 +1260,10 @@ local function teardown()
     State.destroyed = true
 
     stopFloat(true)
+    stopNavLoop()
     removeNavTool()
+    removeSelectorTool()
+    clearSelection()
     simLoopRunning = false
 
     if navClickConn then
@@ -964,10 +1294,16 @@ local function resetSettings()
     if uiSliderSpeed then uiSliderSpeed:Set(10) end
     if uiDropdownDir then uiDropdownDir:Select({ "向上" }) end
     if uiToggleMove then uiToggleMove:Set(true) end
+    if uiToggleSelect then uiToggleSelect:Set(false) end
+    State.selectionMode = false
+    removeSelectorTool()
+    clearSelection()
     if uiToggleFixed then uiToggleFixed:Set(false) end
     if uiToggleNetwork then uiToggleNetwork:Set(false) end
     if uiDropdownNavScope then uiDropdownNavScope:Select({ "全部漂浮物" }) end
     if uiSliderNavRadius then uiSliderNavRadius:Set(6) end
+    if uiToggleNavHover then uiToggleNavHover:Set(true) end
+    State.navAutoHover = true
     if uiToggleNavMarker then uiToggleNavMarker:Set(true) end
 end
 
@@ -1059,6 +1395,7 @@ local function createInterface()
         Value = true,
         Callback = function(state)
             if suppressToggleCallback then return end
+            if state == State.moving then return end
             setMoving(state)
         end,
     })
@@ -1068,6 +1405,33 @@ local function createInterface()
             uiToggleMove:Set(state)
         end
     end
+
+    MainTab:Space()
+
+    uiToggleSelect = MainTab:Toggle({
+        Title = "选择物体模式",
+        Desc  = "手持「选择器」左键点物体，只漂浮选中的物体",
+        Value = State.selectionMode,
+        Callback = function(state)
+            setSelectionMode(state)
+        end,
+    })
+
+    MainTab:Space()
+
+    MainTab:Button({
+        Title = "取消所有选定物体",
+        Desc  = "清空选择列表，并停止这些物体的漂浮",
+        Icon  = "x-circle",
+        Callback = function()
+            local n = clearSelection()
+            if n == 0 then
+                notify("取消选择", "当前没有选中的物体", 1.5)
+            else
+                notify("取消选择", "已取消全部 " .. n .. " 个物体", 2)
+            end
+        end,
+    })
 
     MainTab:Space()
     MainTab:Section({ Title = "运动参数", TextSize = 16, TextTransparency = 0.35 })
@@ -1200,6 +1564,17 @@ local function createInterface()
         Value = { Min = 2, Max = 30, Default = State.navRadius },
         Callback = function(value)
             setNavRadius(value)
+        end,
+    })
+
+    NavTab:Space()
+
+    uiToggleNavHover = NavTab:Toggle({
+        Title = "到达自动悬停",
+        Desc  = "导航结束后自动关闭「允许移动」，让漂浮物停在原地",
+        Value = State.navAutoHover,
+        Callback = function(state)
+            State.navAutoHover = state
         end,
     })
 
